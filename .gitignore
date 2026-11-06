@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb.bak
+
+# entornos virtuales
+.venv/
+venv/
+env/
+
+# datos y datasets locales
+ethereum-exchange/*.csv
+data/raw/
+data/processed/
+data/samples/*.csv
+#datos de prueba pequeños, data/samples/ versionado:
+# !data/samples/
+
+*.pdf
+
+assets/
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
