@@ -34,8 +34,9 @@ python scripts/preparar_dataset.py convertir \
 
 El script **detecta solo** las columnas. Acepta nombres como
 `from_address`/`from`/`sender`, `to_address`/`to`/`receiver` y
-`value`/`amount`. Si existen `token_address` y `block_timestamp`, los conserva
-para poder filtrar después sin volver a leer el CSV.
+`value`/`amount`. Si existen `token_address`, `block_timestamp` y
+`block_number`, los conserva para poder filtrar después sin volver a leer el
+CSV.
 
 ## 2. Generar una muestra para el notebook
 
@@ -149,6 +150,23 @@ drive.mount("/content/drive")
 ```
 
 y apunta `--entrada` / `--salida` a `/content/drive/MyDrive/...`.
+
+La capa compartida (`src/grafo.py`) también puede leer el Parquet
+directamente y traer solo una muestra a memoria, sin exportar un CSV:
+
+```python
+from src.grafo import Grafo
+
+grafo = Grafo().cargar(
+    "/content/transferencias.parquet",
+    muestra=2_000,       # aristas que se cargan para los algoritmos
+    semilla=42,
+)
+grafo.conservar_componente_mayor()
+```
+
+La celda de la Sección 1 del notebook hace exactamente eso cuando
+`FUENTE = "parquet"`.
 
 ## Archivos que no se suben a Git
 

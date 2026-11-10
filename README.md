@@ -84,7 +84,14 @@ tareas están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 1. Abre `notebooks/Proyecto_Teoria_Grafos.ipynb` en Colab.
 2. Ejecuta la **celda de configuración**: clona el repositorio público y se
    ubica en su raíz.
-3. Ejecuta las demás celdas en orden.
+3. Ejecuta la **celda de carga única** (Sección 1): construye una sola vez el
+   grafo que usan las cuatro tareas. Acepta CSV o Parquet y permite elegir
+   entre la muestra del repo, una muestra de 100k o el Parquet real.
+4. Ejecuta las demás celdas en orden.
+
+Las cuatro tareas reciben el mismo objeto `grafo`; ninguna vuelve a leer el
+archivo. El análisis del dataset completo se hace aparte con DuckDB en la
+Sección 2.
 
 No hay que subir archivos ni cambiar rutas: la celda de configuración lo hace
 todo.

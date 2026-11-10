@@ -51,6 +51,7 @@ CANDIDATOS = {
     "value": ["value", "amount", "token_amount", "quantity", "val"],
     "token": ["token_address", "contract_address", "token", "tokenaddress"],
     "time": ["block_timestamp", "timestamp", "block_time", "date", "time"],
+    "block": ["block_number", "block"],
 }
 
 
@@ -128,6 +129,10 @@ def convertir(args: argparse.Namespace) -> None:
         columnas_select.append(f'CAST("{mapa["token"]}" AS VARCHAR) AS token_address')
     if mapa["time"] and mapa["time"] not in (mapa["from"], mapa["to"], mapa["value"]):
         columnas_select.append(f'CAST("{mapa["time"]}" AS VARCHAR) AS block_timestamp')
+    # El dataset original trae `block_number` (no timestamp). Lo conservamos
+    # para poder filtrar por rango de bloques sin volver a leer el CSV.
+    if mapa.get("block") and mapa["block"] not in (mapa["from"], mapa["to"], mapa["value"]):
+        columnas_select.append(f'CAST("{mapa["block"]}" AS BIGINT) AS block_number')
 
     select = ", ".join(columnas_select)
     consulta = (

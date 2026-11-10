@@ -61,6 +61,37 @@ Después de eso, todos los módulos reciben:
 | `grafo.etiquetas` | `dict[str, dict]` | nombre legible de cada dirección |
 | `grafo.nombre(addr)` | `str` | nombre legible de un nodo |
 
+### Carga única y formatos
+
+La carga se hace **una sola vez** en la celda de la Sección 1 del notebook.
+Después, las cuatro tareas reutilizan el mismo objeto `grafo`; ninguna vuelve
+a abrir el CSV ni el Parquet.
+
+`cargar()` detecta el formato por la extensión:
+
+```python
+from src.grafo import Grafo
+
+# CSV pequeño (muestra del repo)
+grafo = Grafo().cargar("data/sample/transferencias.csv")
+
+# Parquet real: se trae una muestra a memoria, no las 38 M de filas
+grafo = Grafo().cargar(
+    "data/procesado/transferencias.parquet",
+    muestra=2_000,
+    semilla=42,
+)
+```
+
+Para Parquet, DuckDB solo se usa para leer, filtrar y muestrear. Los
+algoritmos siguen siendo Python puro y reciben el grafo ya construido. Si la
+muestra deja nodos aislados, `grafo.conservar_componente_mayor()` se queda con
+la componente conexa más grande sin volver a leer el archivo.
+
+> **Celda vs. módulo:** en Colab, cada cuadro de código es una **celda**; la
+> implementación de cada algoritmo vive en un **módulo** `.py` dentro de
+> `src/`. Las celdas solo importan y usan esos módulos.
+
 ## Reglas de aislamiento
 
 1. **Sin importaciones cruzadas.** `bellman_ford.py` no importa
