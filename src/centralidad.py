@@ -89,13 +89,19 @@ def pagerank(
 
     for _ in range(max_iter):
         base = (1.0 - amortiguacion) / n
+
+        # Los nodos "sumidero" (sin aristas de salida) no reparten su
+        # importancia a nadie. Para que los puntajes sigan sumando 1, su masa
+        # se reparte por igual entre todos los nodos.
+        masa_sumidero = sum(pr[v] for v in lista if grado_salida[v] == 0)
+
         nuevo = {}
         for v in lista:
             suma = 0.0
             for u in entrantes[v]:
                 if grado_salida[u] > 0:
                     suma += pr[u] / grado_salida[u]
-            nuevo[v] = base + amortiguacion * suma
+            nuevo[v] = base + amortiguacion * (suma + masa_sumidero / n)
 
         # Medimos cuánto cambió el vector para saber si ya convergió.
         delta = sum(abs(nuevo[v] - pr[v]) for v in lista)

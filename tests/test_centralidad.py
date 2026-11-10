@@ -24,3 +24,11 @@ def test_pagerank_suma_uno():
     nodos = {"A", "B", "C"}
     pr = pagerank(adj, nodos)
     assert abs(sum(pr.values()) - 1.0) < 0.01
+
+
+def test_pagerank_con_sumidero_suma_uno():
+    # B no tiene aristas de salida (sumidero). Su masa debe repartirse para
+    # que los puntajes sigan sumando 1.
+    adj = {"A": [("B", 1.0)], "B": []}
+    pr = pagerank(adj, {"A", "B"})
+    assert abs(sum(pr.values()) - 1.0) < 0.01

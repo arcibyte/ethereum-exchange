@@ -59,12 +59,17 @@ proyecto/
 │   └── test_arbol_expansion.py
 ├── notebooks/
 │   └── Proyecto_Teoria_Grafos.ipynb   <- entregable principal (Colab)
+├── scripts/
+│   └── preparar_dataset.py <- 8 GB -> Parquet (~2.3 GB) + muestras
 ├── docs/
 │   ├── ARQUITECTURA.md     <- contrato y reglas de división
+│   ├── DATASET.md          <- cómo procesar el dataset grande
 │   ├── guias/              <- guías de lectura por tarea
 │   ├── emerson/            <- reporte y guion de la T3
 │   ├── guion_video.md      <- plan del video (9 min)
 │   └── poster.md           <- contenido del póster
+├── requirements.txt
+├── requirements-datos.txt  <- duckdb + pyarrow (solo preprocesamiento)
 └── README.md
 ```
 
@@ -112,10 +117,31 @@ python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 
 ## Sobre el dataset
 
-Para este proyecto usamos una **muestra pequeña** (12 direcciones y 24
-transferencias) para que todo se entienda y corra rápido. La misma idea se
-aplica al dataset completo (~38 millones de transferencias), que se comparte
-por Drive y **no** se sube al repositorio por su tamaño.
+El dataset completo (~38 millones de transferencias, ~8 GB) se comparte por
+Drive y **no** se sube al repositorio por su tamaño. Para trabajar con él sin
+quedarnos sin memoria, incluimos un script que lo "precarga" en **Parquet
+comprimido** (~2.3 GB) y genera muestras manejables:
+
+```bash
+pip install -r requirements-datos.txt
+
+# 1) CSV de 8 GB -> Parquet de ~2.3 GB
+python scripts/preparar_dataset.py convertir \
+    --entrada /ruta/transferencias.csv \
+    --salida data/procesado/transferencias.parquet
+
+# 2) Muestra conectada para el notebook
+python scripts/preparar_dataset.py muestra \
+    --entrada data/procesado/transferencias.parquet \
+    --salida data/muestra/transferencias_100k.csv \
+    --filas 100000 --componente
+```
+
+El detalle (por qué baja de tamaño, qué tamaño usar para cada algoritmo y cómo
+filtrar por token o fecha) está en [`docs/DATASET.md`](docs/DATASET.md).
+
+Para el desarrollo diario y los tests usamos una **muestra mínima** (12
+direcciones y 20 transferencias) que corre al instante.
 
 ## Entregables y evaluación
 

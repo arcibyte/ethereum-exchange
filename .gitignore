@@ -20,9 +20,12 @@ env/
 ethereum-exchange/*.csv
 data/raw/
 data/processed/
+data/procesado/
 data/samples/*.csv
-#datos de prueba pequeños, data/samples/ versionado:
-# !data/samples/
+# datos de prueba pequeños, data/sample/ versionado:
+# !data/sample/
+# Las muestras medianas (data/muestra/) sí se pueden versionar si pesan poco.
+*.parquet
 
 *.pdf
 

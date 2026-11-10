@@ -1,0 +1,4 @@
+# Dependencias solo para preparar el dataset grande.
+# Los algoritmos del proyecto NO las usan: son Python puro.
+duckdb>=1.0
+pyarrow>=15

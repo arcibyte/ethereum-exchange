@@ -1,0 +1,106 @@
+# Dataset: cómo pasar de 8 GB a una muestra usable
+
+El dataset completo de transferencias pesa **~8 GB** y no cabe cómodamente en
+memoria (Colab da ~12 GB y esta máquina tiene 11 GB). Además, los algoritmos
+del proyecto son de Python puro y no están pensados para millones de aristas.
+
+La solución tiene dos partes:
+
+1. **Precargar** el CSV en **Parquet comprimido** (~2.3 GB).
+2. **Muestrear** un subgrafo manejable para ejecutar los algoritmos.
+
+El preprocesamiento usa `duckdb` (solo para datos). **Los algoritmos siguen
+siendo Python puro** y no dependen de ninguna librería externa.
+
+## ¿Por qué baja de 8 GB a 2.3 GB?
+
+El CSV guarda todo como texto. Parquet guarda columnas en binario y las
+comprime con ZSTD. Las direcciones hexadecimales se repiten mucho, así que
+comprimen muy bien. Una reducción de 3 a 4 veces es lo normal: **8 GB → ~2.3 GB**.
+
+## Instalar las dependencias de datos
+
+```bash
+pip install -r requirements-datos.txt
+```
+
+## 1. Convertir el CSV completo a Parquet
+
+```bash
+python scripts/preparar_dataset.py convertir \
+    --entrada /ruta/al/transferencias.csv \
+    --salida data/procesado/transferencias.parquet
+```
+
+El script **detecta solo** las columnas. Acepta nombres como
+`from_address`/`from`/`sender`, `to_address`/`to`/`receiver` y
+`value`/`amount`. Si existen `token_address` y `block_timestamp`, los conserva
+para poder filtrar después sin volver a leer el CSV.
+
+## 2. Generar una muestra para el notebook
+
+```bash
+python scripts/preparar_dataset.py muestra \
+    --entrada data/procesado/transferencias.parquet \
+    --salida data/muestra/transferencias_100k.csv \
+    --filas 100000 --componente
+```
+
+Opciones útiles:
+
+| Opción | Para qué sirve |
+|--------|----------------|
+| `--filas N` | cuántas transferencias conservar (después de filtrar) |
+| `--token 0x...` | analizar un solo token ERC-20 |
+| `--desde` / `--hasta` | ventana de tiempo (texto ISO, ej. `2024-01-01`) |
+| `--componente` | conservar solo la componente conexa más grande |
+
+`--componente` es importante: un muestreo aleatorio deja muchos nodos
+aislados. Quedarse con la componente más grande produce una red conectada y
+resultados interpretables.
+
+## 3. Ver estadísticas
+
+```bash
+python scripts/preparar_dataset.py info \
+    --entrada data/procesado/transferencias.parquet
+```
+
+## ¿Qué tamaño usar?
+
+| Uso | Tamaño recomendado | Por qué |
+|-----|--------------------|---------|
+| Tests y demo rápida | 12 nodos / 20 aristas (`data/sample/`) | corre al instante |
+| Notebook (algoritmos) | **V ≤ 2 000, E ≤ 5 000** | Bellman-Ford es `O(V·E)`; Louvain recalcula `Q` |
+| Estadísticas del dataset | 100 000–1 000 000 de filas | solo se consultan con DuckDB, no se corren algoritmos |
+
+Regla práctica: Bellman-Ford hace `V · E` operaciones. Con `V = 2 000` y
+`E = 5 000` son ~10 millones, aceptable. Con `V = 50 000` y `E = 200 000` son
+~10 000 millones: no termina.
+
+Por eso el notebook usa una muestra para los algoritmos y, si se quiere,
+DuckDB para describir el dataset completo.
+
+## Usarlo en el notebook
+
+En la celda de imports, cambia la ruta:
+
+```python
+# RUTA_TRANSFERENCIAS = "data/sample/transferencias.csv"      # muestra mínima
+RUTA_TRANSFERENCIAS = "data/muestra/transferencias_100k.csv"  # muestra mediana
+```
+
+En **Colab**, si el Parquet está en Drive:
+
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+```
+
+y apunta `--entrada` / `--salida` a `/content/drive/MyDrive/...`.
+
+## Archivos que no se suben a Git
+
+`.gitignore` excluye `data/procesado/` y `*.parquet` porque pesan demasiado.
+La muestra mediana (`data/muestra/`) sí se puede versionar si pesa poco
+(alrededor de 10–20 MB).
