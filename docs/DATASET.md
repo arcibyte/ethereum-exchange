@@ -81,6 +81,20 @@ Regla práctica: Bellman-Ford hace `V · E` operaciones. Con `V = 2 000` y
 Por eso el notebook usa una muestra para los algoritmos y, si se quiere,
 DuckDB para describir el dataset completo.
 
+## En Colab con Drive (recomendado)
+
+Si el CSV está en Google Drive, abre
+[`notebooks/Preparar_Dataset_Colab.ipynb`](../notebooks/Preparar_Dataset_Colab.ipynb).
+Ese notebook:
+
+1. monta Drive,
+2. clona el repositorio e instala `requirements-datos.txt`,
+3. convierte el CSV a Parquet,
+4. muestra estadísticas,
+5. genera la muestra en `data/muestra/`.
+
+Solo hay que cambiar `RUTA_CSV` por la ruta real del archivo en Drive.
+
 ## Usarlo en el notebook
 
 En la celda de imports, cambia la ruta:

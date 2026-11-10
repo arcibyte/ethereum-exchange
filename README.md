@@ -58,7 +58,8 @@ proyecto/
 │   ├── test_comunidades.py
 │   └── test_arbol_expansion.py
 ├── notebooks/
-│   └── Proyecto_Teoria_Grafos.ipynb   <- entregable principal (Colab)
+│   ├── Proyecto_Teoria_Grafos.ipynb      <- entregable principal (Colab)
+│   └── Preparar_Dataset_Colab.ipynb      <- herramienta para procesar el CSV grande
 ├── scripts/
 │   └── preparar_dataset.py <- 8 GB -> Parquet (~2.3 GB) + muestras
 ├── docs/
