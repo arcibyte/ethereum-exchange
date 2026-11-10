@@ -30,6 +30,7 @@ no sabe nada de los otros.
 | Archivo | Dueño | Tarea |
 |---------|-------|-------|
 | `src/grafo.py` | Grupo | Capa compartida (datos y grafo) |
+| `src/analisis.py` | Grupo | Análisis del dataset completo con DuckDB |
 | `src/bellman_ford.py` | Pablo Álvarez | T1 — caminos de costo mínimo |
 | `src/centralidad.py` | Jhon Arciniegas | T2 — centralidad y PageRank |
 | `src/comunidades.py` | Emerson Ballesteros | T3 — comunidades (Louvain) |
@@ -87,6 +88,22 @@ Para Parquet, DuckDB solo se usa para leer, filtrar y muestrear. Los
 algoritmos siguen siendo Python puro y reciben el grafo ya construido. Si la
 muestra deja nodos aislados, `grafo.conservar_componente_mayor()` se queda con
 la componente conexa más grande sin volver a leer el archivo.
+
+Cada módulo recibe `grafo.aristas` y construye **su propia estructura** con un
+adaptador pequeño. Así ningún módulo depende de la estructura de otro:
+
+```python
+from src.comunidades import louvain_desde_aristas
+
+comunidades = louvain_desde_aristas(grafo.aristas)   # arma su grafo no dirigido
+```
+
+| Módulo | Adaptador |
+|--------|-----------|
+| `bellman_ford.py` | `bellman_ford_desde_aristas` |
+| `centralidad.py` | `pagerank_desde_aristas`, `centralidad_grado_desde_aristas` |
+| `comunidades.py` | `louvain_desde_aristas`, `desde_aristas` |
+| `arbol_expansion.py` | `kruskal_desde_aristas` |
 
 > **Celda vs. módulo:** en Colab, cada cuadro de código es una **celda**; la
 > implementación de cada algoritmo vive en un **módulo** `.py` dentro de

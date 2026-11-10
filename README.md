@@ -42,11 +42,15 @@ profesor, además de aportar su tarea (T3).
 
 ```
 proyecto/
-├── data/sample/            <- dataset de ejemplo (pequeño, corre al instante)
-│   ├── transferencias.csv  <- transferencias (from_address, to_address, value)
-│   └── etiquetas.csv       <- nombre legible de cada dirección
+├── data/
+│   ├── sample/             <- muestra mínima para tests (12 nodos)
+│   │   ├── transferencias.csv
+│   │   └── etiquetas.csv
+│   └── muestra/            <- muestra conectada real (~2.000 aristas, ~200 KB)
+│       ├── transferencias_2k.csv
+│       └── etiquetas.csv
 ├── src/                    <- nuestros algoritmos (Python puro)
-│   ├── grafo.py            <- COMPARTIDO: carga del dataset y grafo
+│   ├── grafo.py            <- COMPARTIDO: carga única (CSV/Parquet)
 │   ├── bellman_ford.py     <- tarea 1 (Pablo)
 │   ├── centralidad.py      <- tarea 2 (Jhon)
 │   ├── comunidades.py      <- tarea 3 (Emerson)
@@ -56,12 +60,15 @@ proyecto/
 │   ├── test_bellman_ford.py
 │   ├── test_centralidad.py
 │   ├── test_comunidades.py
-│   └── test_arbol_expansion.py
+│   ├── test_arbol_expansion.py
+│   ├── test_grafo.py
+│   └── test_datos.py
 ├── notebooks/
 │   ├── Proyecto_Teoria_Grafos.ipynb      <- entregable principal (Colab)
 │   └── Preparar_Dataset_Colab.ipynb      <- herramienta para procesar el CSV grande
 ├── scripts/
-│   └── preparar_dataset.py <- 8 GB -> Parquet (~2.3 GB) + muestras
+│   ├── preparar_dataset.py <- 8 GB -> Parquet (~2.3 GB)
+│   └── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
 ├── docs/
 │   ├── ARQUITECTURA.md     <- contrato y reglas de división
 │   ├── DATASET.md          <- cómo procesar el dataset grande
@@ -85,8 +92,8 @@ tareas están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 2. Ejecuta la **celda de configuración**: clona el repositorio público y se
    ubica en su raíz.
 3. Ejecuta la **celda de carga única** (Sección 1): construye una sola vez el
-   grafo que usan las cuatro tareas. Acepta CSV o Parquet y permite elegir
-   entre la muestra del repo, una muestra de 100k o el Parquet real.
+   grafo que usan las cuatro tareas. Por defecto usa la muestra conectada de
+   ~2.000 aristas; también acepta el Parquet real.
 4. Ejecuta las demás celdas en orden.
 
 Las cuatro tareas reciben el mismo objeto `grafo`; ninguna vuelve a leer el
@@ -125,10 +132,10 @@ python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 
 ## Sobre el dataset
 
-El dataset completo (~38 millones de transferencias, ~8 GB) se comparte por
+El dataset completo (~38,9 millones de transferencias, ~8 GB) se comparte por
 Drive y **no** se sube al repositorio por su tamaño. Para trabajar con él sin
-quedarnos sin memoria, incluimos un script que lo "precarga" en **Parquet
-comprimido** (~2.3 GB) y genera muestras manejables:
+quedarnos sin memoria, lo "precargamos" en **Parquet comprimido** (~2,3 GB) y
+generamos una muestra conectada para los algoritmos:
 
 ```bash
 pip install -r requirements-datos.txt
@@ -138,21 +145,30 @@ python scripts/preparar_dataset.py convertir \
     --entrada /ruta/transferencias.csv \
     --salida data/procesado/transferencias.parquet
 
-# 2) Muestra conectada para el notebook
-python scripts/preparar_dataset.py muestra \
+# 2) Parquet -> muestra conectada de ~2.000 aristas + etiquetas
+python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
-    --salida data/muestra/transferencias_100k.csv \
-    --filas 100000 --componente
+    --salida data/muestra/transferencias_2k.csv \
+    --etiquetas /ruta/exchange_labels.csv \
+    --salida-etiquetas data/muestra/etiquetas.csv \
+    --objetivo 2000
 ```
+
+- `data/procesado/transferencias.parquet` (~2,3 GB): dataset completo, va a
+  **Drive**.
+- `data/muestra/transferencias_2k.csv` (~200 KB): muestra para los
+  algoritmos, va a **GitHub**.
+- `data/sample/`: 12 nodos para tests, va a **GitHub**.
 
 El detalle (por qué baja de tamaño, qué tamaño usar para cada algoritmo y cómo
 filtrar por token o fecha) está en [`docs/DATASET.md`](docs/DATASET.md).
 
 El notebook incluye además una sección de **análisis extenso** con su propia
-celda de configuración: estadísticas del dataset completo y un **benchmark de
-escalabilidad** que mide, sobre subgrafos reales de tamaño creciente, por qué
-Bellman-Ford y Louvain se ejecutan sobre una muestra y Kruskal/PageRank
-aguantan más. Todo sale del dataset real; no se inventan grafos.
+celda de configuración: estadísticas del dataset completo (38,9 M) y un
+**benchmark de escalabilidad** que mide, sobre subgrafos reales de tamaño
+creciente, por qué Bellman-Ford y Louvain se ejecutan sobre una muestra y
+Kruskal/PageRank aguantan más. Todo sale del dataset real; no se inventan
+grafos.
 
 Para el desarrollo diario y los tests usamos una **muestra mínima** (12
 direcciones y 20 transferencias) que corre al instante.

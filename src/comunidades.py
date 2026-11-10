@@ -61,6 +61,19 @@ def modularidad(
 ) -> float:
     """Calcula la modularidad Q de la partición actual.
 
+    Fórmula para grafo NO dirigido y ponderado:
+
+        Q = suma_c [ L_c / m - (K_c / (2m))^2 ]
+
+    donde:
+        - L_c = peso de las aristas internas de la comunidad c.
+        - K_c = suma de grados (pesos) de los nodos de c.
+        - m   = peso total del grafo.
+
+    Es equivalente a la fórmula clásica
+        Q = (1/2m) * suma_{i,j} [A_ij - k_i*k_j/(2m)] * delta(c_i, c_j)
+    pero se calcula por comunidad para no recorrer todos los pares.
+
     Parámetros:
         adj_nd: lista de adyacencia del grafo NO dirigido.
         comunidades: {nodo: id_comunidad}.
@@ -73,13 +86,27 @@ def modularidad(
     if m == 0:
         return 0.0
 
-    q = 0.0
+    # K_c: suma de grados de los nodos de cada comunidad.
+    kc: Dict[int, float] = defaultdict(float)
+    for v, k in grados.items():
+        kc[comunidades[v]] += k
+
+    # L_c: peso de las aristas internas. Cada arista no dirigida se cuenta
+    # una sola vez, por eso usamos u < v (o el auto-loop una vez).
+    lc: Dict[int, float] = defaultdict(float)
     for u, vecinos in adj_nd.items():
         for v, w in vecinos:
-            if comunidades[u] == comunidades[v]:
-                # Arista dentro de la misma comunidad.
-                q += w - grados[u] * grados[v] / (2 * m)
-    return q / (2 * m)
+            if comunidades[u] != comunidades[v]:
+                continue
+            if u < v:
+                lc[comunidades[u]] += w
+            elif u == v:
+                lc[comunidades[u]] += w / 2.0
+
+    q = 0.0
+    for c, k in kc.items():
+        q += lc.get(c, 0.0) / m - (k / (2.0 * m)) ** 2
+    return q
 
 
 def louvain(
@@ -153,3 +180,25 @@ def resumen_comunidades(
             nombre = etiquetas[nodo].get("nombre", nodo)
         grupos[c].append(nombre)
     return dict(grupos)
+
+
+def desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+) -> Dict[str, List[Tuple[str, float]]]:
+    """Construye el grafo NO dirigido a partir de la lista compartida de aristas.
+
+    Si hay transferencias en ambos sentidos, sus pesos se suman.
+    """
+    adj: Dict[str, List[Tuple[str, float]]] = {}
+    for origen, destino, peso in aristas:
+        adj.setdefault(origen, []).append((destino, float(peso)))
+    return simetrizar(adj)
+
+
+def louvain_desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+    semilla: int = 42,
+    max_pasadas: int = 20,
+) -> Dict[str, int]:
+    """Louvain a partir de la lista compartida de aristas."""
+    return louvain(desde_aristas(aristas), semilla=semilla, max_pasadas=max_pasadas)

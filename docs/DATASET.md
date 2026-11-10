@@ -40,11 +40,14 @@ CSV.
 
 ## 2. Generar una muestra para el notebook
 
+Para explorar muestras más grandes (no para los algoritmos, que necesitan la
+muestra conectada de la sección siguiente):
+
 ```bash
 python scripts/preparar_dataset.py muestra \
     --entrada data/procesado/transferencias.parquet \
-    --salida data/muestra/transferencias_100k.csv \
-    --filas 100000 --componente
+    --salida data/muestra/transferencias_10k.csv \
+    --filas 10000 --componente
 ```
 
 Opciones útiles:
@@ -60,6 +63,25 @@ Opciones útiles:
 aislados. Quedarse con la componente más grande produce una red conectada y
 resultados interpretables.
 
+### Muestra conectada reproducible (recomendada)
+
+`scripts/generar_muestra.py` hace lo mismo pero de forma reproducible y
+guardando también las etiquetas de los exchanges que aparecen:
+
+```bash
+python scripts/generar_muestra.py \
+    --entrada data/procesado/transferencias.parquet \
+    --salida data/muestra/transferencias_2k.csv \
+    --etiquetas data/raw/exchange_labels.csv \
+    --salida-etiquetas data/muestra/etiquetas.csv \
+    --objetivo 2000 --semilla 42
+```
+
+- Toma una muestra aleatoria con semilla fija.
+- Se queda con la **componente conexa más grande**.
+- Escribe un CSV de ~200 KB y un CSV de etiquetas.
+- Es la muestra que usa el notebook por defecto (`FUENTE = "muestra"`).
+
 ## 3. Ver estadísticas
 
 ```bash
@@ -72,8 +94,9 @@ python scripts/preparar_dataset.py info \
 | Uso | Tamaño recomendado | Por qué |
 |-----|--------------------|---------|
 | Tests y demo rápida | 12 nodos / 20 aristas (`data/sample/`) | corre al instante |
-| Notebook (algoritmos) | **V ≤ 2 000, E ≤ 5 000** | Bellman-Ford es `O(V·E)`; Louvain recalcula `Q` |
-| Estadísticas del dataset | 100 000–1 000 000 de filas | solo se consultan con DuckDB, no se corren algoritmos |
+| Notebook (algoritmos) | **V ≈ 1 500, E ≈ 2 000** (`data/muestra/`) | Bellman-Ford es `O(V·E)`; Louvain recalcula `Q` |
+| Estadísticas del dataset | **38,9 M de filas** con DuckDB | solo se consultan, no se cargan en RAM |
+| Benchmark de escalabilidad | 1 000 → 500 000 aristas | muestra dónde se rompe cada algoritmo |
 
 Regla práctica: Bellman-Ford hace `V · E` operaciones. Con `V = 2 000` y
 `E = 5 000` son ~10 millones, aceptable. Con `V = 50 000` y `E = 200 000` son
@@ -118,9 +141,9 @@ TOKEN = None
 | `TIMEOUT_SEG` | si un algoritmo tarda más, se marca como *timeout* |
 | `TOKEN` | analizar un solo token |
 
-Todo sale del **Parquet real**: el benchmark extrae una muestra de
-transferencias y toma prefijos de tamaño creciente. **No se generan grafos
-sintéticos.**
+Todo sale del **Parquet real**: el benchmark extrae subgrafos conectados de
+tamaño creciente (BFS desde un nodo de alto grado) y mide cada algoritmo.
+**No se generan grafos sintéticos.**
 
 Para un análisis más largo, sube `TAMANOS` (por ejemplo, hasta 500 000) y
 `TIMEOUT_SEG`. Si Colab va lento, bájalos.
@@ -129,18 +152,21 @@ La sección produce:
 - resumen del dataset (transferencias, direcciones, volumen);
 - distribución de montos (log10);
 - distribución de grados (log-log);
-- actividad por día (si hay `block_timestamp`);
+- actividad por día (si hay `block_timestamp` o `block_number`);
 - top 10 direcciones por volumen;
 - tabla y gráfica log-log del tiempo vs. tamaño de cada algoritmo.
 
 ## Usarlo en el notebook
 
-En la celda de imports, cambia la ruta:
+El notebook usa una sola variable, `FUENTE`, en la celda de carga:
 
 ```python
-# RUTA_TRANSFERENCIAS = "data/sample/transferencias.csv"      # muestra mínima
-RUTA_TRANSFERENCIAS = "data/muestra/transferencias_100k.csv"  # muestra mediana
+FUENTE = "muestra"   # "sample" | "muestra" | "parquet"
 ```
+
+- `"sample"` → `data/sample/transferencias.csv` (12 nodos, tests).
+- `"muestra"` → `data/muestra/transferencias_2k.csv` (muestra conectada).
+- `"parquet"` → trae una muestra del Parquet completo con DuckDB.
 
 En **Colab**, si el Parquet está en Drive:
 
@@ -149,18 +175,17 @@ from google.colab import drive
 drive.mount("/content/drive")
 ```
 
-y apunta `--entrada` / `--salida` a `/content/drive/MyDrive/...`.
-
-La capa compartida (`src/grafo.py`) también puede leer el Parquet
-directamente y traer solo una muestra a memoria, sin exportar un CSV:
+La capa compartida (`src/grafo.py`) puede leer el Parquet directamente y traer
+solo una muestra a memoria, sin exportar un CSV:
 
 ```python
-from src.grafo import Grafo
+from src.grafo import cargar_grafo
 
-grafo = Grafo().cargar(
+grafo = cargar_grafo(
     "/content/transferencias.parquet",
     muestra=2_000,       # aristas que se cargan para los algoritmos
     semilla=42,
+    etiquetas="data/muestra/etiquetas.csv",
 )
 grafo.conservar_componente_mayor()
 ```
@@ -171,5 +196,4 @@ La celda de la Sección 1 del notebook hace exactamente eso cuando
 ## Archivos que no se suben a Git
 
 `.gitignore` excluye `data/procesado/` y `*.parquet` porque pesan demasiado.
-La muestra mediana (`data/muestra/`) sí se puede versionar si pesa poco
-(alrededor de 10–20 MB).
+La muestra de 2k (`data/muestra/`) sí se versiona: pesa ~200 KB.

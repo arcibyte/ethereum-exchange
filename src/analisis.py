@@ -153,6 +153,19 @@ def estadisticas(
             f"SELECT substr(block_timestamp, 1, 10) AS dia, count(*) AS n "
             f"FROM {src} GROUP BY dia ORDER BY dia"
         ).fetchall()
+    elif "block_number" in columnas:
+        # El dataset original trae número de bloque, no fecha. Convertimos a
+        # una fecha aproximada usando el bloque génesis del extracto
+        # (6.525.201 ≈ 2018-10-08) y ~13,5 s por bloque.
+        actividad = con.execute(
+            f"SELECT strftime("
+            f"  to_timestamp("
+            f"    epoch(TIMESTAMP '2018-10-08 00:00:00') "
+            f"    + (CAST(block_number AS BIGINT) - 6525201) * 13.5"
+            f"  ), '%Y-%m-%d'"
+            f") AS dia, count(*) AS n "
+            f"FROM {src} GROUP BY dia ORDER BY dia"
+        ).fetchall()
 
     return {
         "resumen": {
@@ -190,12 +203,25 @@ def extraer_base(
     """
     columnas = _columnas(con, ruta)
     where = _where(columnas, token)
+    # Muestra reproducible: el benchmark debe dar los mismos tamaños en cada
+    # ejecución. Si la versión de DuckDB no soporta REPEATABLE, se usa la
+    # muestra aleatoria simple.
     consulta = (
         f"SELECT from_address, to_address, value "
         f"FROM (SELECT * FROM read_parquet({_texto(ruta)}) {where}) "
-        f"USING SAMPLE {int(max_aristas)} ROWS"
+        f"USING SAMPLE reservoir({int(max_aristas)} ROWS) REPEATABLE (42)"
     )
-    return con.execute(consulta).fetchall()
+    try:
+        return con.execute(consulta).fetchall()
+    except Exception as exc:
+        if "parser" not in str(exc).lower() and "syntax" not in str(exc).lower():
+            raise
+        consulta = (
+            f"SELECT from_address, to_address, value "
+            f"FROM (SELECT * FROM read_parquet({_texto(ruta)}) {where}) "
+            f"USING SAMPLE {int(max_aristas)} ROWS"
+        )
+        return con.execute(consulta).fetchall()
 
 
 def componente_mas_grande(
@@ -230,6 +256,50 @@ def componente_mas_grande(
             mejor = componente
 
     return [e for e in aristas if e[0] in mejor and e[1] in mejor]
+
+
+def _adyacencia(aristas):
+    """Construye {nodo: [(vecino, peso, indice_arista), ...]}."""
+    ady = defaultdict(list)
+    for indice, (a, b, w) in enumerate(aristas):
+        ady[a].append((b, float(w), indice))
+        ady[b].append((a, float(w), indice))
+    return ady
+
+
+def subgrafo_conectado(aristas, max_aristas, ady=None):
+    """Extrae un subgrafo CONECTADO de hasta `max_aristas` aristas reales.
+
+    Empieza por el nodo de mayor grado y hace un BFS, agregando las aristas
+    que encuentra. Al procesar todas las aristas de cada nodo visitado, el
+    subgrafo conserva ciclos (no es solo un árbol), lo que permite comparar
+    Louvain y Kruskal de forma justa.
+
+    Si se pasa `ady`, se reutiliza la adyacencia del conjunto base.
+    """
+    if ady is None:
+        ady = _adyacencia(aristas)
+    if not ady:
+        return []
+
+    inicio = max(ady, key=lambda nodo: len(ady[nodo]))
+    visitados = {inicio}
+    cola = deque([inicio])
+    elegidas: set[int] = set()
+
+    while cola and len(elegidas) < max_aristas:
+        nodo = cola.popleft()
+        for vecino, _, indice in ady[nodo]:
+            if indice in elegidas:
+                continue
+            elegidas.add(indice)
+            if len(elegidas) >= max_aristas:
+                break
+            if vecino not in visitados:
+                visitados.add(vecino)
+                cola.append(vecino)
+
+    return [aristas[i] for i in sorted(elegidas)]
 
 
 def _construir(aristas):
@@ -288,8 +358,8 @@ def benchmark(
 ) -> list[dict]:
     """Mide el tiempo de cada algoritmo a distintos tamaños reales.
 
-    Para cada tamaño toma un prefijo de la muestra real, se queda con la
-    componente conexa más grande y corre los cuatro algoritmos.
+    Para cada tamaño extrae un subgrafo CONECTADO del conjunto base (aristas
+    reales) y corre los cuatro algoritmos.
 
     Si un algoritmo se pasa del timeout, se marca como `None` y **no se vuelve
     a probar en tamaños mayores** (su costo solo puede crecer). Esto evita
@@ -297,9 +367,10 @@ def benchmark(
     """
     resultados: list[dict] = []
     agotados: set[str] = set()
+    ady_base = _adyacencia(aristas_base)
 
     for tamano in tamanos:
-        sub = componente_mas_grande(aristas_base[:tamano])
+        sub = subgrafo_conectado(aristas_base, tamano, ady_base)
         adj, nodos, aristas = _construir(sub)
         n_nodos, n_aristas = len(nodos), len(aristas)
         if n_nodos == 0:

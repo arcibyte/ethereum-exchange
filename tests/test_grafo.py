@@ -70,6 +70,17 @@ def test_conservar_componente_mayor():
     assert len(grafo.aristas) == 2
 
 
+def test_cargar_etiquetas_en_latin1(tmp_path):
+    ruta = tmp_path / "etiquetas.csv"
+    ruta.write_bytes(
+        "address,name,type\n0xaaa,Café Central,dex\n".encode("latin-1")
+    )
+
+    grafo = Grafo().cargar_etiquetas(str(ruta))
+
+    assert grafo.nombre("0xaaa") == "Café Central"
+
+
 # ---------- Parquet (opcional) ----------
 
 @pytest.fixture()

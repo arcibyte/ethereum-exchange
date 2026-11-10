@@ -112,3 +112,21 @@ def resumen_mst(mst: List[Tuple[str, str, float]]) -> Dict[str, float]:
         "aristas": len(mst),
         "costo_total": sum(w for _, _, w in mst),
     }
+
+
+def kruskal_desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+) -> Tuple[List[Tuple[str, str, float]], float]:
+    """Kruskal a partir de la lista compartida de aristas.
+
+    Convierte las aristas dirigidas en no dirigidas (sumando pesos si hay
+    transferencias en ambos sentidos) y calcula el MST.
+    """
+    no_dirigidas = aristas_no_dirigidas(
+        [(origen, destino, float(peso)) for origen, destino, peso in aristas]
+    )
+    nodos: Set[str] = set()
+    for origen, destino, _ in no_dirigidas:
+        nodos.add(origen)
+        nodos.add(destino)
+    return kruskal(nodos, no_dirigidas)

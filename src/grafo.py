@@ -300,14 +300,24 @@ class Grafo:
         """
         import csv
 
-        with open(ruta_csv, newline="", encoding="utf-8") as archivo:
-            lector = csv.DictReader(archivo)
-            for fila in lector:
-                addr = fila["address"].strip().lower()
-                self.etiquetas[addr] = {
-                    "nombre": fila.get("name", "").strip(),
-                    "tipo": fila.get("type", "").strip(),
-                }
+        # Algunos exports de etiquetas vienen en latin-1 (nombres con tildes).
+        filas = None
+        for codificacion in ("utf-8", "latin-1"):
+            try:
+                with open(ruta_csv, newline="", encoding=codificacion) as archivo:
+                    filas = list(csv.DictReader(archivo))
+                break
+            except UnicodeDecodeError:
+                continue
+        if filas is None:  # pragma: no cover - archivo binario inválido
+            raise ValueError(f"No se pudo leer el CSV de etiquetas: {ruta_csv}")
+
+        for fila in filas:
+            addr = fila["address"].strip().lower()
+            self.etiquetas[addr] = {
+                "nombre": fila.get("name", "").strip(),
+                "tipo": fila.get("type", "").strip(),
+            }
         return self
 
     # ------------------------------------------------------------------
@@ -377,3 +387,24 @@ class Grafo:
             "densidad": round(densidad, 4),
             "peso_total": round(peso_total, 2),
         }
+
+
+def cargar_grafo(
+    ruta: str,
+    max_filas: Optional[int] = None,
+    etiquetas: Optional[str] = None,
+    **opciones,
+) -> Grafo:
+    """Carga el dataset UNA vez y devuelve el objeto compartido `Grafo`.
+
+    Es la función que usa el notebook. Las cuatro tareas reciben
+    `grafo.aristas` y construyen su propia estructura; no vuelven a leer el
+    archivo.
+
+    Ejemplo:
+        grafo = cargar_grafo("data/sample/transferencias.csv")
+    """
+    grafo = Grafo().cargar(ruta, max_filas=max_filas, **opciones)
+    if etiquetas:
+        grafo.cargar_etiquetas(etiquetas)
+    return grafo

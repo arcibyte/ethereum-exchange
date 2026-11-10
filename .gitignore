@@ -17,15 +17,12 @@ venv/
 env/
 
 # datos y datasets locales
-ethereum-exchange/*.csv
 data/raw/
 data/processed/
 data/procesado/
-data/samples/*.csv
-# datos de prueba pequeños, data/sample/ versionado:
-# !data/sample/
-# Las muestras medianas (data/muestra/) sí se pueden versionar si pesan poco.
 *.parquet
+
+# Las muestras pequeñas (data/sample/ y data/muestra/) sí se versionan.
 
 *.pdf
 
