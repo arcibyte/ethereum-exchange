@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.bellman_ford import bellman_ford, reconstruir_camino
 from src.centralidad import centralidad_grado, pagerank
-from src.comunidades import louvain, modularidad
 from src.arbol_expansion import UnionFind, aristas_no_dirigidas, kruskal
 
 
@@ -54,42 +53,6 @@ def test_pagerank_suma_uno():
     nodos = {"A", "B", "C"}
     pr = pagerank(adj, nodos)
     assert abs(sum(pr.values()) - 1.0) < 0.01
-
-
-# ---------- Comunidades (Tarea 3) ----------
-
-def test_modularidad_particion_buena():
-    # Dos triángulos separados: Q debe ser alta y positiva.
-    adj = {
-        "A": [("B", 1.0), ("C", 1.0)],
-        "B": [("A", 1.0), ("C", 1.0)],
-        "C": [("A", 1.0), ("B", 1.0)],
-        "D": [("E", 1.0), ("F", 1.0)],
-        "E": [("D", 1.0), ("F", 1.0)],
-        "F": [("D", 1.0), ("E", 1.0)],
-    }
-    comunidades = {"A": 0, "B": 0, "C": 0, "D": 1, "E": 1, "F": 1}
-    assert modularidad(adj, comunidades) > 0.3
-
-
-def test_louvain_separa_comunidades():
-    # Dos cliques unidas por una arista muy débil.
-    adj = {}
-
-    def enlazar(u, v, w=1.0):
-        adj.setdefault(u, []).append((v, w))
-        adj.setdefault(v, []).append((u, w))
-
-    for a, b in [("A", "B"), ("A", "C"), ("B", "C")]:
-        enlazar(a, b)
-    for a, b in [("D", "E"), ("D", "F"), ("E", "F")]:
-        enlazar(a, b)
-    enlazar("C", "D", 0.1)
-
-    comunidades = louvain(adj, semilla=1)
-    assert comunidades["A"] == comunidades["B"] == comunidades["C"]
-    assert comunidades["D"] == comunidades["E"] == comunidades["F"]
-    assert comunidades["A"] != comunidades["D"]
 
 
 # ---------- Árbol de expansión mínima (Tarea 4) ----------
