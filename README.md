@@ -141,6 +141,12 @@ python scripts/preparar_dataset.py muestra \
 El detalle (por qué baja de tamaño, qué tamaño usar para cada algoritmo y cómo
 filtrar por token o fecha) está en [`docs/DATASET.md`](docs/DATASET.md).
 
+El notebook incluye además una sección de **análisis extenso** con su propia
+celda de configuración: estadísticas del dataset completo y un **benchmark de
+escalabilidad** que mide, sobre subgrafos reales de tamaño creciente, por qué
+Bellman-Ford y Louvain se ejecutan sobre una muestra y Kruskal/PageRank
+aguantan más. Todo sale del dataset real; no se inventan grafos.
+
 Para el desarrollo diario y los tests usamos una **muestra mínima** (12
 direcciones y 20 transferencias) que corre al instante.
 

@@ -95,6 +95,43 @@ Ese notebook:
 
 Solo hay que cambiar `RUTA_CSV` por la ruta real del archivo en Drive.
 
+## Análisis extenso (benchmark de escalabilidad)
+
+El notebook principal trae una sección **"Análisis extenso del dataset
+completo"** con su celda de configuración:
+
+```python
+RUTA_PARQUET = "/content/transferencias.parquet"
+FILAS_ANALISIS = None          # None = todo el Parquet
+TAMANOS = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000]
+REPETICIONES = 3
+TIMEOUT_SEG = 30
+TOKEN = None
+```
+
+| Parámetro | Qué controla |
+|-----------|--------------|
+| `FILAS_ANALISIS` | cuántas filas usar para las estadísticas |
+| `TAMANOS` | cuántas aristas reales extraer en cada medición |
+| `REPETICIONES` | repeticiones por medición (se usa la mediana) |
+| `TIMEOUT_SEG` | si un algoritmo tarda más, se marca como *timeout* |
+| `TOKEN` | analizar un solo token |
+
+Todo sale del **Parquet real**: el benchmark extrae una muestra de
+transferencias y toma prefijos de tamaño creciente. **No se generan grafos
+sintéticos.**
+
+Para un análisis más largo, sube `TAMANOS` (por ejemplo, hasta 500 000) y
+`TIMEOUT_SEG`. Si Colab va lento, bájalos.
+
+La sección produce:
+- resumen del dataset (transferencias, direcciones, volumen);
+- distribución de montos (log10);
+- distribución de grados (log-log);
+- actividad por día (si hay `block_timestamp`);
+- top 10 direcciones por volumen;
+- tabla y gráfica log-log del tiempo vs. tamaño de cada algoritmo.
+
 ## Usarlo en el notebook
 
 En la celda de imports, cambia la ruta:
