@@ -5,6 +5,8 @@ Proyecto final de **Estructura de Datos** — Universidad Industrial de Santande
 **Profesor:** Jonnathan Alfredo Ramos Chaux
 **Equipo:** Jhon Arciniegas, Pablo Álvarez y Emerson Ballesteros (líder)
 
+[![Abrir en Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/arcibyte/ethereum-exchange/blob/main/notebooks/Proyecto_Teoria_Grafos.ipynb)
+
 ---
 
 ## ¿De qué trata el proyecto?
@@ -44,27 +46,44 @@ proyecto/
 │   ├── transferencias.csv  <- transferencias (from_address, to_address, value)
 │   └── etiquetas.csv       <- nombre legible de cada dirección
 ├── src/                    <- nuestros algoritmos (Python puro)
-│   ├── grafo.py            <- carga del dataset y construcción del grafo
-│   ├── bellman_ford.py     <- tarea 1: caminos de costo mínimo
-│   ├── centralidad.py      <- tarea 2: centralidad y PageRank
-│   ├── comunidades.py      <- tarea 3: detección de comunidades
-│   └── arbol_expansion.py  <- tarea 4: árbol de expansión mínima
+│   ├── grafo.py            <- COMPARTIDO: carga del dataset y grafo
+│   ├── bellman_ford.py     <- tarea 1 (Pablo)
+│   ├── centralidad.py      <- tarea 2 (Jhon)
+│   ├── comunidades.py      <- tarea 3 (Emerson)
+│   └── arbol_expansion.py  <- tarea 4 (grupo)
+├── tests/                  <- un archivo de pruebas por dueño
+│   ├── conftest.py
+│   ├── test_bellman_ford.py
+│   ├── test_centralidad.py
+│   ├── test_comunidades.py
+│   └── test_arbol_expansion.py
 ├── notebooks/
-│   └── Proyecto_Teoria_Grafos.ipynb   <- entregable principal (notebook)
-├── tests/
-│   └── test_algorithms.py  <- pruebas de cada algoritmo
+│   └── Proyecto_Teoria_Grafos.ipynb   <- entregable principal (Colab)
 ├── docs/
+│   ├── ARQUITECTURA.md     <- contrato y reglas de división
+│   ├── guias/              <- guías de lectura por tarea
+│   ├── emerson/            <- reporte y guion de la T3
 │   ├── guion_video.md      <- plan del video (9 min)
 │   └── poster.md           <- contenido del póster
 └── README.md
 ```
 
+La división del código y las reglas para modificarlo sin romper las demás
+tareas están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+
 ## Cómo ejecutar
 
-**Google Colab (recomendado):** sube el repositorio a GitHub y abre el
-notebook desde Colab.
+### Google Colab (recomendado)
 
-**Local:**
+1. Abre `notebooks/Proyecto_Teoria_Grafos.ipynb` en Colab.
+2. Ejecuta la **celda de configuración**: clona el repositorio público y se
+   ubica en su raíz.
+3. Ejecuta las demás celdas en orden.
+
+No hay que subir archivos ni cambiar rutas: la celda de configuración lo hace
+todo.
+
+### Local
 
 ```bash
 git clone https://github.com/arcibyte/ethereum-exchange
@@ -77,11 +96,18 @@ pip install matplotlib jupyter
 jupyter notebook notebooks/Proyecto_Teoria_Grafos.ipynb
 ```
 
-Para correr las pruebas:
+La misma celda de configuración detecta la raíz del repositorio en local.
+
+### Pruebas
 
 ```bash
 pip install pytest
-python -m pytest tests/ -v
+
+python -m pytest tests/ -v                    # toda la suite
+python -m pytest tests/test_bellman_ford.py -v    # solo T1 (Pablo)
+python -m pytest tests/test_centralidad.py -v     # solo T2 (Jhon)
+python -m pytest tests/test_comunidades.py -v     # solo T3 (Emerson)
+python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 ```
 
 ## Sobre el dataset

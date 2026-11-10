@@ -3,14 +3,9 @@ Pruebas unitarias de la Tarea 3 — Detección de comunidades (Louvain).
 
 Responsable: Emerson Ballesteros.
 
-Ejecutar con:
+Ejecutar solo esta tarea:
     python -m pytest tests/test_comunidades.py -v
 """
-
-import os
-import sys
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.comunidades import louvain, modularidad, resumen_comunidades, simetrizar
 
