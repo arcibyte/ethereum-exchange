@@ -1,160 +1,100 @@
 """
-bellman_ford.py – Tarea 1: Caminos mínimos sin Dijkstra.
+bellman_ford.py
+===============
+Tarea 1 — Caminos de costo mínimo.
 
-Responsable: Pablo Álvarez
+Problema: encontrar la ruta más "barata" entre dos direcciones del grafo,
+donde el costo de una ruta es la suma de los pesos de sus aristas.
 
-Problema real:
-    En la red de transferencias de tokens Ethereum, un actor malicioso puede
-    intentar mover fondos a través de la menor cantidad de intermediarios
-    posibles (lavado de dinero, arbitraje encubierto). Encontrar el camino
-    de costo mínimo (medido en número de saltos o en inverso del volumen
-    transferido) entre dos wallets permite al análisis forense identificar
-    rutas de flujo financiero.
+Regla del proyecto: NO se puede usar Dijkstra. Por eso usamos Bellman-Ford,
+que además es capaz de detectar ciclos de peso negativo.
 
-Equivalencia matemática:
-    G = (V, E, w)  grafo DIRIGIDO y PONDERADO
-    Problema: Dado s ∈ V, encontrar d(s, v) = min-weight path de s a todo v ∈ V
-    Se usa Bellman-Ford en lugar de Dijkstra porque:
-      1) Dijkstra está PROHIBIDO por las reglas del proyecto.
-      2) Bellman-Ford detecta ciclos de peso negativo (relevante si w(e) = -log(ratio),
-         técnica estándar en detección de arbitraje).
-      3) Bellman-Ford es O(|V|·|E|) vs O((|V|+|E|) log|V|) de Dijkstra,
-         lo cual es tolerable para subgrafos de tamaño moderado.
+Idea del algoritmo:
+    1. Empezamos con distancia 0 en el origen e "infinito" en el resto.
+    2. Repetimos |V|-1 veces: por cada arista (u -> v, w), si
+       dist[u] + w < dist[v], entonces actualizamos dist[v] = dist[u] + w.
+       (a esto se le llama "relajar" una arista).
+    3. Al terminar, dist[v] es la distancia mínima desde el origen a v.
 
-Alternativas algorítmicas descartadas:
-    - Dijkstra: PROHIBIDO explícitamente.
-    - Floyd-Warshall: O(|V|³) – inviable para |V| >> 10³.
-    - BFS: solo válido para grafos no ponderados (w ≡ 1).
-    ✓ Bellman-Ford: seleccionado por detectar pesos negativos y cumplir restricciones.
+Complejidad: O(|V| * |E|).
 """
 
-from __future__ import annotations
-
-from math import inf
 from typing import Dict, List, Optional, Tuple
 
-from src.graph_loader import AdjList
+INF = float("inf")
 
 
 def bellman_ford(
-    adj: AdjList,
-    source: str,
+    adj: Dict[str, List[Tuple[str, float]]],
+    origen: str,
 ) -> Tuple[Dict[str, float], Dict[str, Optional[str]]]:
-    """Implementa el algoritmo de Bellman-Ford desde cero.
+    """Calcula las distancias mínimas desde `origen` a todos los nodos.
 
-    Calcula distancias mínimas desde `source` a todos los nodos alcanzables
-    del grafo dirigido y ponderado representado por `adj`.
+    Parámetros:
+        adj: lista de adyacencia {nodo: [(vecino, peso), ...]}.
+        origen: nodo de partida.
 
-    Args:
-        adj: Lista de adyacencia {src: [(dst, weight), ...]} del grafo G.
-        source: Nodo origen s ∈ V desde el cual se calculan las distancias.
-
-    Returns:
-        Tupla (dist, prev) donde:
-            dist (Dict[str, float]): dist[v] = costo mínimo de s a v.
-                                     inf si v no es alcanzable desde s.
-            prev (Dict[str, Optional[str]]): prev[v] = predecesor de v en el
-                                             camino mínimo (None si v == source).
-
-    Raises:
-        ValueError: Si se detecta un ciclo de peso negativo alcanzable desde source.
-
-    Complexity:
-        Tiempo: O(|V| · |E|)
-        Espacio: O(|V|)
-
-    Example:
-        >>> adj = {"A": [("B", 2.0), ("C", 5.0)], "B": [("C", 1.0)], "C": []}
-        >>> dist, prev = bellman_ford(adj, "A")
-        >>> dist["C"]
-        3.0
+    Retorna:
+        (distancias, predecesores):
+            - distancias[v] = costo mínimo desde `origen` hasta v
+              (INF si v es inalcanzable).
+            - predecesores[v] = nodo anterior a v en el camino mínimo
+              (None para el origen).
     """
-    # Recolectar todos los nodos del grafo (incluye nodos sin aristas salientes)
-    nodes: set = set(adj.keys())
-    for neighbors in adj.values():
-        for dst, _ in neighbors:
-            nodes.add(dst)
+    # 1. Reunimos todos los nodos del grafo (incluye los que no tienen
+    #    aristas salientes pero sí entrantes).
+    nodos = set(adj.keys())
+    for vecinos in adj.values():
+        for dst, _ in vecinos:
+            nodos.add(dst)
 
-    # dist[v] = estimación actual del costo mínimo s → v
-    dist: Dict[str, float] = {v: inf for v in nodes}
-    dist[source] = 0.0
+    # 2. Inicializamos distancias y predecesores.
+    dist = {v: INF for v in nodos}
+    dist[origen] = 0.0
+    prev = {v: None for v in nodos}
 
-    # prev[v] = predecesor de v en el árbol de caminos mínimos
-    prev: Dict[str, Optional[str]] = {v: None for v in nodes}
+    # 3. Relajamos todas las aristas |V|-1 veces.
+    for _ in range(len(nodos) - 1):
+        cambio = False
+        for u in adj:
+            for v, w in adj[u]:
+                if dist[u] + w < dist[v]:
+                    dist[v] = dist[u] + w
+                    prev[v] = u
+                    cambio = True
+        if not cambio:
+            # Ya no mejora nada: terminamos antes de tiempo.
+            break
 
-    # Invariante de ciclo (iteración k):
-    #   Al inicio de la iteración k, dist[v] contiene el costo mínimo de todo
-    #   camino s → v que usa EXACTAMENTE k-1 aristas o menos.
-    #   Al finalizar la iteración k, dist[v] es el mínimo para k aristas o menos.
-    # Tras |V|-1 iteraciones, dist[v] es el costo mínimo global (si no hay
-    # ciclos negativos alcanzables desde s).
-    num_vertices = len(nodes)
-    for _iteration in range(num_vertices - 1):
-        # TODO (Pablo): implementar el bucle de relajación de aristas
-        # Para cada arista (u → v, w):
-        #     si dist[u] + w < dist[v]:
-        #         dist[v] = dist[u] + w
-        #         prev[v] = u
-        updated = False  # optimización: parar si no hubo cambios
-        for src, neighbors in adj.items():
-            for dst, w in neighbors:
-                if dist[src] + w < dist[dst]:
-                    dist[dst] = dist[src] + w
-                    prev[dst] = src
-                    updated = True
-        if not updated:
-            break  # Convergencia prematura: grafo sin más relajaciones posibles
-
-    #Detección de ciclos negativos
-    # Si después de |V|-1 iteraciones aún es posible relajar alguna arista,
-    # existe un ciclo de peso negativo alcanzable desde source.
-    for src, neighbors in adj.items():
-        for dst, w in neighbors:
-            if dist[src] + w < dist[dst]:
-                raise ValueError(
-                    f"Ciclo de peso negativo detectado. "
-                    f"Nodo involucrado: {dst}"
-                )
+    # 4. (Opcional) Una pasada extra para detectar ciclos de peso negativo.
+    #    Con pesos positivos nunca ocurre, pero es una ventaja de Bellman-Ford.
+    for u in adj:
+        for v, w in adj[u]:
+            if dist[u] + w < dist[v]:
+                raise ValueError("Se detectó un ciclo de peso negativo.")
 
     return dist, prev
 
 
-def reconstruct_path(
+def reconstruir_camino(
     prev: Dict[str, Optional[str]],
-    source: str,
-    target: str,
+    origen: str,
+    destino: str,
 ) -> List[str]:
-    """Reconstruye el camino mínimo de source a target usando el árbol prev.
+    """Reconstruye el camino mínimo desde `origen` hasta `destino`.
 
-    Args:
-        prev: Diccionario de predecesores obtenido de bellman_ford().
-        source: Nodo origen.
-        target: Nodo destino.
+    Usa el diccionario de predecesores que devuelve `bellman_ford`.
 
-    Returns:
-        Lista de nodos [source, ..., target] formando el camino mínimo.
-        Lista vacía si target no es alcanzable desde source.
-
-    Example:
-        >>> path = reconstruct_path(prev, "A", "C")
-        >>> path
-        ['A', 'B', 'C']
+    Retorna:
+        Lista de nodos [origen, ..., destino], o [] si no hay camino.
     """
-    path: List[str] = []
-    current: Optional[str] = target
+    camino: List[str] = []
+    actual: Optional[str] = destino
 
-    # Traza hacia atrás desde target hasta source usando prev
-    # Invariante: en cada iteración, `current` es el nodo anterior en el camino
-    while current is not None:
-        path.append(current)
-        current = prev.get(current)
-        # Guardia contra ciclos (no debería ocurrir si bellman_ford es correcto)
-        if current == target:
-            break
+    # Retrocedemos desde el destino hasta el origen siguiendo `prev`.
+    while actual is not None:
+        camino.append(actual)
+        actual = prev.get(actual)
 
-    path.reverse()
-
-    # Verificar que el camino efectivamente empieza en source
-    if path and path[0] == source:
-        return path
-    return []  # target no alcanzable desde source
+    camino.reverse()
+    return camino if camino and camino[0] == origen else []

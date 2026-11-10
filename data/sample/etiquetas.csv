@@ -1,0 +1,13 @@
+address,name,type
+0x1111,Uniswap,dex
+0x2222,Curve,dex
+0x3333,Aave,defi
+0x4444,Binance,exchange
+0x5555,Coinbase,exchange
+0x6666,USDC,stablecoin
+0x7777,DAI,stablecoin
+0xaaaa,cartera_a,wallet
+0xbbbb,cartera_b,wallet
+0xcccc,cartera_c,wallet
+0xdddd,cartera_d,wallet
+0xeeee,cartera_e,wallet
