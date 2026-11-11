@@ -115,12 +115,50 @@ No usamos ninguna librería de grafos: todo es Python puro.
 
 ## 6. Implementación
 
-El código está en `src/comunidades.py` y expone cuatro funciones:
+El código está en `src/comunidades.py` y está escrito de forma **explícita**,
+pensando en alguien que lee el algoritmo por primera vez. Expone estas
+funciones:
 
-- `simetrizar(adj)`: convierte el grafo dirigido en no dirigido sumando pesos.
-- `modularidad(adj_nd, comunidades)`: calcula $Q$.
-- `louvain(adj_nd, semilla, max_pasadas)`: detecta las comunidades.
-- `resumen_comunidades(comunidades, etiquetas)`: devuelve los nombres legibles.
+| Función | Qué hace |
+|---|---|
+| `simetrizar(adj)` | convierte el grafo dirigido en no dirigido sumando pesos |
+| `calcular_grados(adj_nd)` | suma los pesos de las aristas de cada nodo |
+| `modularidad(adj_nd, comunidades)` | calcula $Q$ de una partición |
+| `louvain(adj_nd, semilla, max_pasadas)` | mueve nodos para maximizar $Q$ |
+| `resumen_comunidades(comunidades, etiquetas)` | agrupa nodos y devuelve nombres |
+| `renumerar_comunidades(comunidades)` | cambia los IDs por `0, 1, 2, ...` |
+| `desde_aristas(aristas)` | construye el grafo no dirigido desde `grafo.aristas` |
+| `louvain_desde_aristas(aristas, ...)` | atajo: construye el grafo y ejecuta Louvain |
+
+### 6.1 Cómo leer el código paso a paso
+
+1. **`simetrizar`**: recorre las aristas dirigidas y junta los pesos del
+   mismo par. Si existen `A -> B` y `B -> A`, los suma. Al final agrega la
+   arista en los dos sentidos del grafo no dirigido.
+2. **`calcular_grados`**: para cada nodo, suma los pesos de sus vecinos.
+   Ese es el grado ponderado `k_i`.
+3. **`modularidad`**:
+   - calcula `m` como la suma de todos los grados dividida entre 2;
+   - calcula `K_c` (suma de grados por comunidad);
+   - calcula `L_c` (peso de las aristas internas, contando cada arista una
+     sola vez);
+   - aplica `Q = suma_c [L_c/m - (K_c/(2m))^2]`.
+4. **`louvain`**:
+   - crea un generador `random.Random(semilla)` para que el resultado sea
+     reproducible;
+   - pone cada nodo en su propia comunidad;
+   - en cada pasada recorre los nodos en orden aleatorio;
+   - para cada nodo prueba las comunidades de sus vecinos y se queda con la
+     que más aumente `Q`;
+   - si una pasada completa no cambia nada, termina.
+5. **`resumen_comunidades`**: agrupa los nodos por ID y cambia la dirección
+   por su nombre de exchange si existe.
+6. **`renumerar_comunidades`**: Louvain devuelve IDs como 300 o 692; esta
+   función los cambia a 0, 1, 2, ... para que la salida sea más legible.
+   No cambia la partición.
+7. **`desde_aristas`**: recibe `grafo.aristas`, arma el grafo dirigido y lo
+   pasa por `simetrizar`. Así la tarea 3 no depende de la estructura de otro
+   módulo.
 
 La modularidad se calcula por comunidad para que sea $O(V+E)$:
 
@@ -131,6 +169,37 @@ suma de grados de sus nodos. Es equivalente a la fórmula clásica y se verific�
 con una prueba que la compara contra la suma directa sobre todos los pares.
 
 Las pruebas propias están en `tests/test_comunidades.py`.
+
+### 6.2 Mini ejemplo para entenderlo
+
+```
+Ana   <--> Beto     (peso alto)
+Carla <--> Dani     (peso alto)
+Beto  -->  Carla    (peso bajo)
+```
+
+- `simetrizar` deja las tres conexiones como no dirigidas.
+- `modularidad` compara las conexiones internas con las esperadas por azar.
+- `louvain` mueve nodos: Ana y Beto se quedan juntos; Carla y Dani también.
+- El puente Beto–Carla es débil, así que no fusiona los dos grupos.
+- `Q` alto indica que la partición es mejor que el azar.
+
+### 6.3 Posibles mejoras
+
+Estas mejoras no son necesarias para el alcance actual, pero son el siguiente
+paso natural si el grafo crece:
+
+1. **ΔQ incremental**: calcular el cambio de modularidad sin recalcular todo
+   `Q` en cada prueba. Es la mejora más importante para velocidad.
+2. **Fase de agregación**: convertir cada comunidad en un super-nodo y
+   repetir el proceso. Es el Louvain completo del paper.
+3. **Parámetro de resolución γ**: permite encontrar comunidades más grandes o
+   más pequeñas.
+4. **Varias semillas**: quedarse con la partición de mayor `Q`.
+5. **Comparación**: Label Propagation, `python-louvain` y el propio Louvain
+   sobre la misma muestra.
+6. **Estructuras eficientes**: arreglos/CSR en vez de diccionarios para
+   millones de aristas.
 
 ## 7. Resultados sobre el dataset de ejemplo
 
@@ -159,10 +228,12 @@ entre 0.730 y 0.736, lo que muestra que el resultado es estable.
 ## 8. Complejidad
 
 - `simetrizar`: $O(|E|)$.
+- `calcular_grados`: $O(|V| + |E|)$.
 - `modularidad`: $O(|V| + |E|)$.
 - `louvain`: $O(\text{pasadas} \cdot |V| \cdot \text{grado} \cdot (|V|+|E|))$
   en esta versión sencilla (aceptable para grafos pequeños). La versión
   incremental de Louvain es $\approx O(|V| \log |V|)$.
+- `renumerar_comunidades`: $O(|V|)$.
 
 ## 9. Conclusiones de la tarea
 

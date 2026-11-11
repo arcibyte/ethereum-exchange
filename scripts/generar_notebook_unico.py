@@ -235,51 +235,167 @@ assert top_n({"A": 0.5, "B": 0.3}, n=2)[0][0] == "A"
 print("Validaciones de centralidad: OK")
 '''
 
-t3_md = """
+t3_md = r"""
 ## Tarea 3 — Louvain: detección de comunidades
 
 **Responsable:** Emerson Ballesteros
 
-Se maximiza la modularidad:
+### Antes del código: ¿qué es una comunidad?
 
-$$Q = \\sum_c \\left[\\frac{L_c}{m} - \\left(\\frac{K_c}{2m}\\right)^2\\right]$$
+Imagina cuatro direcciones:
 
-- `L_c`: peso interno de la comunidad.
-- `K_c`: suma de grados de la comunidad.
+```
+Ana   <--> Beto     (se transfieren mucho)
+Carla <--> Dani     (se transfieren mucho)
+Beto  -->  Carla    (se transfieren poquito)
+```
+
+Hay dos grupos naturales: `{Ana, Beto}` y `{Carla, Dani}`. Louvain intenta
+encontrar esos grupos automáticamente, sin que le digamos cuántos hay.
+
+### ¿Qué mide la modularidad Q?
+
+Q compara las aristas que quedan **dentro** de los grupos con las que
+aparecerían si las conexiones fueran al azar. Si hay más conexiones internas
+de las esperadas, Q sube.
+
+$$Q = \sum_c \left[\frac{L_c}{m} - \left(\frac{K_c}{2m}\right)^2\right]$$
+
+- `L_c`: peso de las aristas internas de la comunidad `c`.
+- `K_c`: suma de grados de los nodos de `c`.
 - `m`: peso total del grafo.
+- `Q > 0.3` sugiere una estructura de comunidades clara.
+- `Q = 0` significa que la partición no es mejor que el azar.
 
-`Q > 0.3` sugiere una estructura de comunidades clara.
+### Paso a paso del algoritmo
+
+1. Cada nodo empieza en su propia comunidad.
+2. Se recorre la lista de nodos en orden aleatorio.
+3. Para cada nodo, se prueba moverlo a la comunidad de cada vecino.
+4. Se acepta el movimiento solo si Q aumenta.
+5. Cuando una pasada completa no cambia nada, el algoritmo termina.
+
+### Cómo leer el código
+
+| Función | Qué hace |
+|---|---|
+| `simetrizar` | convierte el grafo dirigido en no dirigido |
+| `calcular_grados` | suma los pesos de las aristas de cada nodo |
+| `modularidad` | calcula Q de una partición |
+| `louvain` | hace las pasadas y mueve los nodos |
+| `desde_aristas` | construye el grafo no dirigido desde `grafo.aristas` |
+| `louvain_desde_aristas` | atajo: construye el grafo y ejecuta Louvain |
+| `renumerar_comunidades` | cambia los IDs por 0, 1, 2, ... para leerlos mejor |
+
+### Qué mirar en los resultados
+
+- Los **IDs de comunidad son arbitrarios**: la comunidad 0 no es mejor que la 5.
+- Lo importante es **Q**, el **tamaño** de las comunidades y **qué exchanges**
+  quedan juntos.
+- Louvain es **heurístico**: dos semillas pueden dar particiones parecidas
+  pero no idénticas.
+
+### Limitaciones y posibles mejoras
+
+- Esta versión recalcula Q completo en cada prueba: es fácil de leer, pero lenta.
+- No incluye la fase de agregación de Louvain.
+- Puede sufrir el límite de resolución: comunidades muy pequeñas pueden pasar
+  desapercibidas.
+- Mejoras: calcular ΔQ incremental, agregar la fase de agregación, probar
+  varias semillas y comparar con Label Propagation o `python-louvain`.
 """
 
 t3_demo = '''
-# ============ DEMO TAREA 3 ============
+# ============ TAREA 3: LOUVAIN ============
+# Paso 1: construir el grafo no dirigido.
 adj_no_dirigido = desde_aristas(grafo.aristas)
-comunidades = louvain_desde_aristas(grafo.aristas, semilla=42)
+
+cantidad_nodos = len(adj_no_dirigido)
+cantidad_aristas = 0
+for vecinos in adj_no_dirigido.values():
+    cantidad_aristas += len(vecinos)
+cantidad_aristas = cantidad_aristas // 2
+
+print("Grafo no dirigido:")
+print(f"  nodos   : {cantidad_nodos:,}")
+print(f"  aristas : {cantidad_aristas:,}")
+
+# Paso 2: ejecutar Louvain con una semilla fija.
+comunidades = louvain(adj_no_dirigido, semilla=42)
+
+# Renumerar 0, 1, 2, ... para que sea más fácil leer los resultados.
+comunidades = renumerar_comunidades(comunidades)
+
+# Paso 3: medir la calidad de la partición.
 Q = modularidad(adj_no_dirigido, comunidades)
 
+print()
 print(f"Modularidad Q = {Q:.3f}")
-print(f"Número de comunidades = {len(set(comunidades.values()))}\\n")
+print(f"Número de comunidades = {len(set(comunidades.values())):,}")
 
+# Paso 4: mostrar las comunidades más grandes.
 grupos = resumen_comunidades(comunidades, grafo.etiquetas)
-for i, (c, nombres) in enumerate(
-    sorted(grupos.items(), key=lambda kv: -len(kv[1]))[:10], 1
-):
-    muestra = ", ".join(sorted(nombres)[:5])
-    if len(nombres) > 5:
-        muestra += ", ..."
-    print(f"Comunidad {i}: {len(nombres):>4} nodos | {muestra}")
 
-# Estabilidad con varias semillas
-print("\\nEstabilidad con 5 semillas:")
-valores_q = []
-for s in [1, 7, 42, 123, 2024]:
-    c = louvain(adj_no_dirigido, semilla=s)
-    q = modularidad(adj_no_dirigido, c)
-    valores_q.append(q)
-    print(f"  semilla {s:>4}: Q={q:.3f}, comunidades={len(set(c.values()))}")
+print()
+print("Comunidades más grandes:")
+for posicion, (id_comunidad, nombres) in enumerate(
+    sorted(grupos.items(), key=lambda par: -len(par[1]))[:10],
+    start=1,
+):
+    primeros = ", ".join(sorted(nombres)[:5])
+    if len(nombres) > 5:
+        primeros += ", ..."
+    print(f"  Comunidad {posicion:>2}: {len(nombres):>4} nodos | {primeros}")
+
+# Paso 5: ver en qué comunidad cae cada exchange etiquetado.
+print()
+print("Comunidad de cada exchange etiquetado:")
+for direccion, info in sorted(
+    grafo.etiquetas.items(), key=lambda par: par[1]["nombre"]
+):
+    if direccion not in comunidades:
+        continue
+    id_comunidad = comunidades[direccion]
+    tamano = len(grupos[id_comunidad])
+    print(f"  {info['nombre']:<18} comunidad {id_comunidad:>3} ({tamano} nodos)")
+'''
+
+t3_exp_md = """
+### Experimento: ¿qué pasa si cambiamos la semilla?
+
+Louvain es un algoritmo **heurístico**: el orden en que prueba los nodos
+puede cambiar el resultado. Por eso se repite con varias semillas y se mira
+si Q se mantiene estable.
+"""
+
+t3_exp_code = '''
+# ============ EXPERIMENTO: ESTABILIDAD CON SEMILLAS ============
+import matplotlib.pyplot as plt
+
+semillas = [1, 7, 42, 123, 2024]
+resultados = []
+
+for semilla in semillas:
+    comunidades_semilla = louvain(adj_no_dirigido, semilla=semilla)
+    q = modularidad(adj_no_dirigido, comunidades_semilla)
+    cuantas = len(set(comunidades_semilla.values()))
+    resultados.append((semilla, q, cuantas))
+
+print(f"{'Semilla':>8} {'Q':>8} {'Comunidades':>12}")
+print("-" * 32)
+for semilla, q, cuantas in resultados:
+    print(f"{semilla:>8} {q:>8.3f} {cuantas:>12}")
+
+mejor = max(resultados, key=lambda fila: fila[1])
+print()
+print(f"Mejor semilla: {mejor[0]} con Q = {mejor[1]:.3f}")
 
 plt.figure(figsize=(6, 4))
-plt.bar([str(s) for s in [1, 7, 42, 123, 2024]], valores_q, color="seagreen")
+plt.bar(
+    [str(fila[0]) for fila in resultados],
+    [fila[1] for fila in resultados],
+    color="seagreen",
+)
 plt.xlabel("Semilla")
 plt.ylabel("Modularidad Q")
 plt.title("Sensibilidad de Louvain a la semilla")
@@ -536,6 +652,8 @@ celdas = [
     code(leer_modulo("centralidad.py") + "\n\n" + t2_demo),
     md(t3_md),
     code(leer_modulo("comunidades.py") + "\n\n" + t3_demo),
+    md(t3_exp_md),
+    code(t3_exp_code),
     md(t4_md),
     code(leer_modulo("arbol_expansion.py") + "\n\n" + t4_demo),
     md(drive_md),

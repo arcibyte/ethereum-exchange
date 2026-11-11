@@ -137,3 +137,14 @@ def test_resumen_comunidades():
     resumen = resumen_comunidades(comunidades, etiquetas)
     assert sorted(resumen[0]) == ["Curve", "Uniswap"]
     assert resumen[1] == ["Binance"]
+
+
+# ---------- Renumeración para mostrar ----------
+
+def test_renumerar_comunidades():
+    from src.comunidades import renumerar_comunidades
+
+    original = {"A": 10, "B": 10, "C": 20, "D": 30}
+    nuevo = renumerar_comunidades(original)
+
+    assert nuevo == {"A": 0, "B": 0, "C": 1, "D": 2}
