@@ -80,19 +80,13 @@ proyecto/
 │   ├── preparar_dataset.py <- 8,3 GB -> Parquet (~0,8 GB)
 │   ├── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
 │   └── preparar_seccion1.py <- resumen por token y aristas limpias (stdlib)
-├── docs/
-│   ├── ARQUITECTURA.md     <- contrato y reglas de división
-│   ├── DATASET.md          <- cómo procesar el dataset grande
-│   ├── PROCESAMIENTO_DATOS.md <- qué se hizo con los datos y por qué
-│   ├── guias/              <- guías de lectura por tarea
-│   ├── emerson/            <- reporte de la T3
 ├── requirements.txt
 ├── requirements-datos.txt  <- duckdb + pyarrow (solo preprocesamiento)
 └── README.md
 ```
 
-La división del código y las reglas para modificarlo sin romper las demás
-tareas están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+El código está dividido por tareas en `src/`, y cada módulo tiene sus
+pruebas en `tests/`.
 
 ## Cómo ejecutar
 
@@ -194,9 +188,8 @@ El entregable usa **un solo archivo**: `transferencias.parquet` (~0,8 GB,
 la muestra de USDC que necesitan los algoritmos. El CSV original de 8,3 GB
 **no** se sube al repositorio.
 
-> La explicación completa del pipeline —qué se hizo con los datos, por qué,
-> cómo verificarlo y dónde va cada archivo— está en
-> [`docs/PROCESAMIENTO_DATOS.md`](docs/PROCESAMIENTO_DATOS.md).
+El pipeline se ejecuta con `scripts/preparar_dataset.py` y
+`scripts/generar_muestra.py`.
 
 ```bash
 pip install -r requirements-datos.txt
@@ -221,9 +214,6 @@ python scripts/generar_muestra.py \
 - `data/muestra/transferencias_2k.csv` (~195 KB): muestra de referencia;
   el notebook también puede generarla desde el Parquet.
 - `data/sample/`: 12 nodos para tests.
-
-El detalle del pipeline está en [`docs/PROCESAMIENTO_DATOS.md`](docs/PROCESAMIENTO_DATOS.md)
-y [`docs/DATASET.md`](docs/DATASET.md).
 
 El notebook incluye las **estadísticas del dataset completo (38,9 M)** con
 DuckDB. Los cuatro algoritmos se ejecutan sobre la muestra de USDC porque su
