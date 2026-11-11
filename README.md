@@ -46,17 +46,27 @@ proyecto/
 │   ├── sample/             <- muestra mínima para tests (12 nodos)
 │   │   ├── transferencias.csv
 │   │   └── etiquetas.csv
-│   └── muestra/            <- muestra conectada real de USDC (~2.000 aristas)
-│       ├── transferencias_2k.csv
-│       └── etiquetas.csv
+│   ├── muestra/            <- muestra conectada real de USDC (~2.000 aristas)
+│   │   ├── transferencias_2k.csv
+│   │   └── etiquetas.csv
+│   ├── real/               <- datos REALES pequeños (ver data/real/FUENTE.md)
+│   │   ├── exchange_labels.csv <- 296 exchanges (247 cex, 49 dex)
+│   │   └── softchaincoin.csv   <- red real de SoftChainCoin
+│   ├── labels/             <- etiquetas completas de exchanges
+│   ├── resumen/            <- resumen de los 28 tokens (lo genera la sección 1)
+│   └── tokens/             <- aristas limpias por token: entrada de T1-T4
 ├── src/                    <- nuestros algoritmos (Python puro)
 │   ├── grafo.py            <- COMPARTIDO: carga única (CSV/Parquet)
+│   ├── dataset.py          <- sección 1 (Pablo): lectura, limpieza, perfil
+│   ├── evaluacion.py       <- COMPARTIDO: precisión@k contra etiquetas
 │   ├── bellman_ford.py     <- tarea 1 (Pablo)
 │   ├── centralidad.py      <- tarea 2 (Jhon)
 │   ├── comunidades.py      <- tarea 3 (Emerson)
 │   └── arbol_expansion.py  <- tarea 4 (grupo)
 ├── tests/                  <- un archivo de pruebas por dueño
 │   ├── conftest.py
+│   ├── test_dataset.py
+│   ├── test_evaluacion.py
 │   ├── test_bellman_ford.py
 │   ├── test_centralidad.py
 │   ├── test_comunidades.py
@@ -69,7 +79,8 @@ proyecto/
 │   └── Preparar_Dataset_Colab.ipynb   <- herramienta para procesar el CSV grande
 ├── scripts/
 │   ├── preparar_dataset.py <- 8,3 GB -> Parquet (~0,8 GB)
-│   └── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
+│   ├── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
+│   └── preparar_seccion1.py <- resumen por token y aristas limpias (stdlib)
 ├── docs/
 │   ├── ARQUITECTURA.md     <- contrato y reglas de división
 │   ├── DATASET.md          <- cómo procesar el dataset grande
@@ -138,11 +149,31 @@ jupyter notebook notebooks/Proyecto_Teoria_Grafos.ipynb
 pip install pytest
 
 python -m pytest tests/ -v                    # toda la suite
+python -m pytest tests/test_dataset.py -v         # solo sección 1 (Pablo)
 python -m pytest tests/test_bellman_ford.py -v    # solo T1 (Pablo)
 python -m pytest tests/test_centralidad.py -v     # solo T2 (Jhon)
 python -m pytest tests/test_comunidades.py -v     # solo T3 (Emerson)
 python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 ```
+
+## Sección 1: preparar los datos reales
+
+La sección 1 del notebook corre sin descargar nada: usa las etiquetas reales y
+la red real de SoftChainCoin que vienen en `data/real/`. Para describir los 28
+tokens del dataset y analizar uno de ellos, se generan **una sola vez** dos
+archivos pequeños a partir del CSV completo y se suben al repositorio:
+
+```bash
+# 1) Resumen de los 28 tokens (una pasada, ~4 min y 2-3 GB de RAM; --sin-distintos usa poca RAM)
+python scripts/preparar_seccion1.py resumen --entrada /ruta/token_transfers_full.csv
+
+# 2) Aristas limpias del token elegido (entrada de las tareas 1-4)
+python scripts/preparar_seccion1.py exportar --entrada /ruta/token_transfers_full.csv \
+    --token 0x... --resumen data/resumen/tokens.csv --salida data/tokens/<nombre>.csv
+```
+
+Solo usa la librería estándar. Las reglas de limpieza son las mismas de los
+autores del dataset; están explicadas en la sección 1.2 del notebook.
 
 ## Sobre el dataset
 

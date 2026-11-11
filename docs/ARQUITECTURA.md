@@ -31,10 +31,15 @@ no sabe nada de los otros.
 |---------|-------|-------|
 | `src/grafo.py` | Grupo | Capa compartida (datos y grafo) |
 | `src/analisis.py` | Grupo | Análisis del dataset completo con DuckDB |
+| `src/evaluacion.py` | Grupo | Capa compartida (precisión@k contra las etiquetas) |
+| `src/dataset.py` | Pablo Álvarez | Sección 1 — lectura, limpieza y perfil del dataset |
+| `scripts/preparar_seccion1.py` | Pablo Álvarez | Sección 1 — genera `data/resumen/` y `data/tokens/` |
 | `src/bellman_ford.py` | Pablo Álvarez | T1 — caminos de costo mínimo |
 | `src/centralidad.py` | Jhon Arciniegas | T2 — centralidad y PageRank |
 | `src/comunidades.py` | Emerson Ballesteros | T3 — comunidades (Louvain) |
 | `src/arbol_expansion.py` | Grupo | T4 — MST (Kruskal + Union-Find) |
+| `tests/test_dataset.py` | Pablo Álvarez | Pruebas de la sección 1 |
+| `tests/test_evaluacion.py` | Grupo | Pruebas de la evaluación |
 | `tests/test_bellman_ford.py` | Pablo Álvarez | Pruebas de T1 |
 | `tests/test_centralidad.py` | Jhon Arciniegas | Pruebas de T2 |
 | `tests/test_comunidades.py` | Emerson Ballesteros | Pruebas de T3 |
@@ -109,11 +114,40 @@ comunidades = louvain_desde_aristas(grafo.aristas)   # arma su grafo no dirigido
 > implementación de cada algoritmo vive en un **módulo** `.py` dentro de
 > `src/`. Las celdas solo importan y usan esos módulos.
 
+### De dónde sale el CSV que carga `Grafo`
+
+La sección 1 (`src/dataset.py`) produce, por token, un archivo
+`data/tokens/<token>.csv` con las columnas
+`from_address, to_address, value, n_transferencias`:
+
+- un solo token (no se mezclan unidades);
+- limpio con las reglas de los autores del dataset (valor > 0, sin polvo,
+  sin autolazos);
+- una arista por par (`value` = suma, `n_transferencias` = cuántas fueron).
+
+`Grafo.cargar_transferencias` lo lee **sin cambios** (ignora la columna
+extra). Para usar datos reales en una tarea basta con apuntar la ruta a ese
+archivo; `grafo.py` no se modifica.
+
+### Evaluar contra las etiquetas
+
+`src/evaluacion.py` es la segunda pieza compartida: cualquier tarea que
+produzca un puntaje por nodo lo evalúa con
+
+```python
+from src.evaluacion import evaluar_ranking
+evaluar_ranking(puntajes, exchanges_presentes, ks=(10, 20, 50, 100))
+```
+
+Es la misma medida (precisión@k y recall@k) del artículo de los autores, así
+que los resultados se pueden comparar con los publicados. Solo usa la
+librería estándar y no importa ningún otro módulo de `src/`.
+
 ## Reglas de aislamiento
 
 1. **Sin importaciones cruzadas.** `bellman_ford.py` no importa
    `centralidad.py`, ni al revés. Cada módulo solo importa la librería estándar
-   (y, si hace falta, `grafo`).
+   (y, si hace falta, las capas compartidas `grafo` y `evaluacion`).
 2. **Datos por parámetro.** Ningún módulo lee el CSV; recibe el grafo ya
    construido.
 3. **Un archivo de tests por dueño.** Si modificas tu algoritmo, corres
@@ -133,7 +167,7 @@ Con esto, si alguien reescribe su módulo entero, lo peor que puede pasar es que
 python -m pytest tests/ -v
 
 # Solo tu tarea (ejemplo: Pablo)
-python -m pytest tests/test_bellman_ford.py -v
+python -m pytest tests/test_dataset.py tests/test_bellman_ford.py -v
 
 # Solo tu tarea (ejemplo: Jhon)
 python -m pytest tests/test_centralidad.py -v
@@ -161,6 +195,7 @@ Cada integrante trabaja en su rama y el líder integra en `main`:
 
 ```
 main
+├── feature/seccion1 (Pablo)
 ├── feature/tarea1   (Pablo)
 ├── feature/tarea2   (Jhon)
 ├── feature/tarea3   (Emerson)

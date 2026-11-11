@@ -115,7 +115,7 @@ class Grafo:
         self,
         ruta_csv: str,
         max_filas: Optional[int] = None,
-        limpiar: bool = True,
+        limpiar: bool = False,
     ) -> "Grafo":
         """Lee un CSV de transferencias y llena la lista de adyacencia.
 
@@ -175,7 +175,7 @@ class Grafo:
         desde: Optional[str] = None,
         hasta: Optional[str] = None,
         semilla: int = 42,
-        limpiar: bool = True,
+        limpiar: bool = False,
     ) -> "Grafo":
         """Lee un Parquet (o una muestra) usando DuckDB.
 
@@ -393,6 +393,7 @@ def cargar_grafo(
     ruta: str,
     max_filas: Optional[int] = None,
     etiquetas: Optional[str] = None,
+    limpiar: bool = True,
     **opciones,
 ) -> Grafo:
     """Carga el dataset UNA vez y devuelve el objeto compartido `Grafo`.
@@ -401,9 +402,13 @@ def cargar_grafo(
     `grafo.aristas` y construyen su propia estructura; no vuelven a leer el
     archivo.
 
+    Por defecto limpia transferencias inválidas (dirección cero, autolazos y
+    valores <= 0). Usa `limpiar=False` si quieres cargar el archivo tal cual.
+
     Ejemplo:
         grafo = cargar_grafo("data/sample/transferencias.csv")
     """
+    opciones.setdefault("limpiar", limpiar)
     grafo = Grafo().cargar(ruta, max_filas=max_filas, **opciones)
     if etiquetas:
         grafo.cargar_etiquetas(etiquetas)

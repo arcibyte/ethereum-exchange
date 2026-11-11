@@ -1,5 +1,12 @@
 # Dataset: cómo pasar de 8,3 GB a una muestra usable
 
+> **Sección 1 del notebook.** Para el resumen de los 28 tokens y las aristas
+> limpias de un token (la entrada de las tareas 1-4) se usa
+> `scripts/preparar_seccion1.py`, que solo necesita la librería estándar y
+> aplica las reglas de limpieza de los autores del dataset. Este documento
+> describe además la herramienta de Parquet/DuckDB, que sigue disponible para
+> el análisis extenso.
+
 El dataset completo de transferencias pesa **~8,3 GB** y no cabe cómodamente en
 memoria (Colab da ~12 GB y esta máquina tiene ~7,4 GB). Además, los algoritmos
 del proyecto son de Python puro y no están pensados para millones de aristas.

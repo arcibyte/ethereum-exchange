@@ -43,7 +43,7 @@ def test_cargar_csv_limpia_invalidas(tmp_path):
         escritor.writerow([DIRECCION_CERO, "0xbbb", "7"])   # dirección cero
         escritor.writerow(["0xbbb", "0xccc", "-3"])         # valor negativo
 
-    grafo = Grafo().cargar_transferencias(str(ruta))
+    grafo = Grafo().cargar_transferencias(str(ruta), limpiar=True)
 
     assert len(grafo.aristas) == 1
     assert grafo.nodos == {"0xaaa", "0xbbb"}
