@@ -131,3 +131,39 @@ def top_n(
             nombre = etiquetas[addr].get("nombre", addr)
         resultado.append((addr, round(score, 6), nombre))
     return resultado
+
+
+def construir_adyacencia(aristas: List[Tuple[str, str, float]]) -> Dict[str, List[Tuple[str, float]]]:
+    """Convierte la lista compartida de aristas en lista de adyacencia."""
+    adj: Dict[str, List[Tuple[str, float]]] = {}
+    for origen, destino, peso in aristas:
+        adj.setdefault(origen, []).append((destino, float(peso)))
+    return adj
+
+
+def nodos_de_aristas(aristas: List[Tuple[str, str, float]]) -> Set[str]:
+    """Devuelve todos los nodos que aparecen en la lista de aristas."""
+    nodos: Set[str] = set()
+    for origen, destino, _ in aristas:
+        nodos.add(origen)
+        nodos.add(destino)
+    return nodos
+
+
+def centralidad_grado_desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+) -> Dict[str, float]:
+    """Centralidad de grado a partir de la lista compartida de aristas."""
+    return centralidad_grado(construir_adyacencia(aristas), nodos_de_aristas(aristas))
+
+
+def pagerank_desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+    **opciones,
+) -> Dict[str, float]:
+    """PageRank a partir de la lista compartida de aristas."""
+    return pagerank(
+        construir_adyacencia(aristas),
+        nodos_de_aristas(aristas),
+        **opciones,
+    )

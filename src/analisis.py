@@ -40,8 +40,14 @@ from src.comunidades import louvain, simetrizar
 # Utilidades de DuckDB
 # ----------------------------------------------------------------------
 
-def abrir():
-    """Abre una conexión DuckDB (en memoria)."""
+def abrir(memoria: str | None = None, temporal: str | None = None, threads: int | None = None):
+    """Abre una conexión DuckDB con ajustes para máquinas de poca RAM.
+
+    Parámetros:
+        memoria: límite de memoria, por ejemplo "2GB".
+        temporal: directorio en disco para derramar datos.
+        threads: número de hilos (menos hilos usan menos memoria).
+    """
     try:
         import duckdb
     except ImportError as exc:  # pragma: no cover
@@ -49,7 +55,21 @@ def abrir():
             "Falta duckdb. Instálalo con:\n"
             "    pip install -r requirements-datos.txt"
         ) from exc
-    return duckdb.connect()
+
+    con = duckdb.connect()
+    # No conservar el orden de inserción reduce mucho el uso de memoria.
+    con.execute("SET preserve_insertion_order = false")
+    if memoria:
+        con.execute(f"SET memory_limit = {_texto(memoria)}")
+    if threads:
+        con.execute(f"SET threads = {int(threads)}")
+
+    # DuckDB necesita un directorio temporal para poder derramar a disco.
+    import tempfile
+    ruta_temporal = temporal or os.path.join(tempfile.gettempdir(), "duckdb_tmp")
+    os.makedirs(ruta_temporal, exist_ok=True)
+    con.execute(f"SET temp_directory = {_texto(ruta_temporal)}")
+    return con
 
 
 def _texto(valor: str) -> str:
@@ -96,7 +116,8 @@ def estadisticas(
         - resumen: totales y promedios.
         - valores: histograma de log10(valor).
         - grados: distribución de grados (entrada + salida).
-        - top_volumen: direcciones que más volumen mueven.
+        - top_volumen: direcciones que más volumen mueven (crudo, por token).
+        - top_actividad: direcciones con más transferencias (comparable).
         - top_grado: direcciones con más conexiones.
         - tokens: conteo por token (si existe la columna).
         - actividad: transferencias por día (si existe la columna de tiempo).
@@ -106,11 +127,19 @@ def estadisticas(
     # (por ejemplo `WHERE value > 0`) sin repetir la cláusula WHERE.
     src = f"(SELECT * FROM {_fuente(ruta, filas)} {_where(columnas, token)})"
 
-    total, origenes, destinos, volumen, promedio, maximo = con.execute(
-        f"SELECT count(*), count(DISTINCT from_address), count(DISTINCT to_address), "
-        f"coalesce(sum(value), 0), coalesce(avg(value), 0), coalesce(max(value), 0) "
+    total, volumen, promedio, maximo = con.execute(
+        f"SELECT count(*), coalesce(sum(value), 0), "
+        f"coalesce(avg(value), 0), coalesce(max(value), 0) "
         f"FROM {src}"
     ).fetchone()
+    # Los distinct se hacen por separado para no mantener dos tablas hash
+    # grandes al mismo tiempo en máquinas con poca RAM.
+    origenes = con.execute(
+        f"SELECT count(DISTINCT from_address) FROM {src}"
+    ).fetchone()[0]
+    destinos = con.execute(
+        f"SELECT count(DISTINCT to_address) FROM {src}"
+    ).fetchone()[0]
 
     valores = con.execute(
         f"SELECT floor(log10(value)) AS bin, count(*) AS n "
@@ -129,6 +158,13 @@ def estadisticas(
     top_volumen = con.execute(
         f"SELECT from_address, sum(value) AS total FROM {src} "
         f"GROUP BY from_address ORDER BY total DESC LIMIT 20"
+    ).fetchall()
+
+    # Ranking por número de transferencias: es comparable entre tokens,
+    # mientras que sumar `value` de tokens distintos mezcla unidades.
+    top_actividad = con.execute(
+        f"SELECT from_address, count(*) AS n FROM {src} "
+        f"GROUP BY from_address ORDER BY n DESC LIMIT 20"
     ).fetchall()
 
     top_grado = con.execute(
@@ -153,6 +189,19 @@ def estadisticas(
             f"SELECT substr(block_timestamp, 1, 10) AS dia, count(*) AS n "
             f"FROM {src} GROUP BY dia ORDER BY dia"
         ).fetchall()
+    elif "block_number" in columnas:
+        # El dataset original trae número de bloque, no fecha. Convertimos a
+        # una fecha aproximada usando el bloque génesis del extracto
+        # (6.525.201 ≈ 2018-10-08) y ~13,5 s por bloque.
+        actividad = con.execute(
+            f"SELECT strftime("
+            f"  to_timestamp("
+            f"    epoch(TIMESTAMP '2018-10-08 00:00:00') "
+            f"    + (CAST(block_number AS BIGINT) - 6525201) * 13.5"
+            f"  ), '%Y-%m-%d'"
+            f") AS dia, count(*) AS n "
+            f"FROM {src} GROUP BY dia ORDER BY dia"
+        ).fetchall()
 
     return {
         "resumen": {
@@ -166,6 +215,7 @@ def estadisticas(
         "valores": [(float(b), int(n)) for b, n in valores],
         "grados": [(int(g), int(n)) for g, n in grados],
         "top_volumen": [(a, float(v)) for a, v in top_volumen],
+        "top_actividad": [(a, int(n)) for a, n in top_actividad],
         "top_grado": [(a, int(g)) for a, g in top_grado],
         "tokens": [(t, int(n)) for t, n in tokens] if tokens else None,
         "actividad": [(d, int(n)) for d, n in actividad] if actividad else None,
@@ -190,12 +240,25 @@ def extraer_base(
     """
     columnas = _columnas(con, ruta)
     where = _where(columnas, token)
+    # Muestra reproducible: el benchmark debe dar los mismos tamaños en cada
+    # ejecución. Si la versión de DuckDB no soporta REPEATABLE, se usa la
+    # muestra aleatoria simple.
     consulta = (
         f"SELECT from_address, to_address, value "
         f"FROM (SELECT * FROM read_parquet({_texto(ruta)}) {where}) "
-        f"USING SAMPLE {int(max_aristas)} ROWS"
+        f"USING SAMPLE reservoir({int(max_aristas)} ROWS) REPEATABLE (42)"
     )
-    return con.execute(consulta).fetchall()
+    try:
+        return con.execute(consulta).fetchall()
+    except Exception as exc:
+        if "parser" not in str(exc).lower() and "syntax" not in str(exc).lower():
+            raise
+        consulta = (
+            f"SELECT from_address, to_address, value "
+            f"FROM (SELECT * FROM read_parquet({_texto(ruta)}) {where}) "
+            f"USING SAMPLE {int(max_aristas)} ROWS"
+        )
+        return con.execute(consulta).fetchall()
 
 
 def componente_mas_grande(
@@ -230,6 +293,50 @@ def componente_mas_grande(
             mejor = componente
 
     return [e for e in aristas if e[0] in mejor and e[1] in mejor]
+
+
+def _adyacencia(aristas):
+    """Construye {nodo: [(vecino, peso, indice_arista), ...]}."""
+    ady = defaultdict(list)
+    for indice, (a, b, w) in enumerate(aristas):
+        ady[a].append((b, float(w), indice))
+        ady[b].append((a, float(w), indice))
+    return ady
+
+
+def subgrafo_conectado(aristas, max_aristas, ady=None):
+    """Extrae un subgrafo CONECTADO de hasta `max_aristas` aristas reales.
+
+    Empieza por el nodo de mayor grado y hace un BFS, agregando las aristas
+    que encuentra. Al procesar todas las aristas de cada nodo visitado, el
+    subgrafo conserva ciclos (no es solo un árbol), lo que permite comparar
+    Louvain y Kruskal de forma justa.
+
+    Si se pasa `ady`, se reutiliza la adyacencia del conjunto base.
+    """
+    if ady is None:
+        ady = _adyacencia(aristas)
+    if not ady:
+        return []
+
+    inicio = max(ady, key=lambda nodo: len(ady[nodo]))
+    visitados = {inicio}
+    cola = deque([inicio])
+    elegidas: set[int] = set()
+
+    while cola and len(elegidas) < max_aristas:
+        nodo = cola.popleft()
+        for vecino, _, indice in ady[nodo]:
+            if indice in elegidas:
+                continue
+            elegidas.add(indice)
+            if len(elegidas) >= max_aristas:
+                break
+            if vecino not in visitados:
+                visitados.add(vecino)
+                cola.append(vecino)
+
+    return [aristas[i] for i in sorted(elegidas)]
 
 
 def _construir(aristas):
@@ -288,8 +395,8 @@ def benchmark(
 ) -> list[dict]:
     """Mide el tiempo de cada algoritmo a distintos tamaños reales.
 
-    Para cada tamaño toma un prefijo de la muestra real, se queda con la
-    componente conexa más grande y corre los cuatro algoritmos.
+    Para cada tamaño extrae un subgrafo CONECTADO del conjunto base (aristas
+    reales) y corre los cuatro algoritmos.
 
     Si un algoritmo se pasa del timeout, se marca como `None` y **no se vuelve
     a probar en tamaños mayores** (su costo solo puede crecer). Esto evita
@@ -297,9 +404,10 @@ def benchmark(
     """
     resultados: list[dict] = []
     agotados: set[str] = set()
+    ady_base = _adyacencia(aristas_base)
 
     for tamano in tamanos:
-        sub = componente_mas_grande(aristas_base[:tamano])
+        sub = subgrafo_conectado(aristas_base, tamano, ady_base)
         adj, nodos, aristas = _construir(sub)
         n_nodos, n_aristas = len(nodos), len(aristas)
         if n_nodos == 0:

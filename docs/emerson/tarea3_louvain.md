@@ -122,6 +122,14 @@ El código está en `src/comunidades.py` y expone cuatro funciones:
 - `louvain(adj_nd, semilla, max_pasadas)`: detecta las comunidades.
 - `resumen_comunidades(comunidades, etiquetas)`: devuelve los nombres legibles.
 
+La modularidad se calcula por comunidad para que sea $O(V+E)$:
+
+$$Q = \sum_c \left[ \frac{L_c}{m} - \left(\frac{K_c}{2m}\right)^2 \right]$$
+
+donde $L_c$ es el peso de las aristas internas de la comunidad $c$ y $K_c$ la
+suma de grados de sus nodos. Es equivalente a la fórmula clásica y se verificó
+con una prueba que la compara contra la suma directa sobre todos los pares.
+
 Las pruebas propias están en `tests/test_comunidades.py`.
 
 ## 7. Resultados sobre el dataset de ejemplo
@@ -142,6 +150,11 @@ encontradas corresponden al **ecosistema DEX** (Uniswap, Curve, Aave y sus
 usuarios) y al **ecosistema de exchanges centralizados** (Binance, Coinbase
 y sus usuarios). El puente entre ambos es una transferencia débil USDC →
 Binance, que el algoritmo correctamente no usa para fusionar los grupos.
+
+Sobre la **muestra conectada real** (`data/muestra/transferencias_2k.csv`,
+~2.063 aristas y ~1.371 nodos de USDC), Louvain encuentra entre **69 y 71
+comunidades con $Q \approx 0.73$**. Al probar 5 semillas, $Q$ se mantiene
+entre 0.730 y 0.736, lo que muestra que el resultado es estable.
 
 ## 8. Complejidad
 

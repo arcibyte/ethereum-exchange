@@ -24,6 +24,20 @@ from typing import Dict, List, Optional, Tuple
 INF = float("inf")
 
 
+def construir_adyacencia(aristas: List[Tuple[str, str, float]]) -> Dict[str, List[Tuple[str, float]]]:
+    """Convierte la lista compartida de aristas en una lista de adyacencia.
+
+    La lista de aristas viene de la carga única del dataset. Cada módulo
+    construye su propia estructura, así no depende de la de otro.
+    """
+    from collections import defaultdict
+
+    adj: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
+    for origen, destino, peso in aristas:
+        adj[origen].append((destino, float(peso)))
+    return dict(adj)
+
+
 def bellman_ford(
     adj: Dict[str, List[Tuple[str, float]]],
     origen: str,
@@ -98,3 +112,11 @@ def reconstruir_camino(
 
     camino.reverse()
     return camino if camino and camino[0] == origen else []
+
+
+def bellman_ford_desde_aristas(
+    aristas: List[Tuple[str, str, float]],
+    origen: str,
+) -> Tuple[Dict[str, float], Dict[str, Optional[str]]]:
+    """Igual que `bellman_ford`, pero recibe la lista compartida de aristas."""
+    return bellman_ford(construir_adyacencia(aristas), origen)

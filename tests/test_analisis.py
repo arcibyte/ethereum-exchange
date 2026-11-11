@@ -18,6 +18,7 @@ from src.analisis import (  # noqa: E402
     componente_mas_grande,
     estadisticas,
     extraer_base,
+    subgrafo_conectado,
 )
 
 
@@ -52,6 +53,7 @@ def test_estadisticas_resumen(parquet):
     assert datos["resumen"]["destinos"] == 5   # B, C, A, E, D
     assert datos["actividad"] is not None
     assert datos["tokens"] == [("0xtoken", 5)]
+    assert datos["top_actividad"][0] == ("A", 2)
 
 
 def test_extraer_base(parquet):
@@ -73,6 +75,34 @@ def test_componente_mas_grande():
     assert {b for _, b, _ in filtradas} == {"B", "C"}
 
 
+def test_subgrafo_conectado():
+    aristas = [
+        ("A", "B", 1.0), ("B", "C", 1.0), ("C", "D", 1.0),
+        ("D", "A", 1.0), ("A", "E", 1.0), ("F", "G", 1.0),
+    ]
+    sub = subgrafo_conectado(aristas, 4)
+
+    assert 0 < len(sub) <= 4
+    # Todas las aristas salen del conjunto original.
+    assert set(sub).issubset(set(aristas))
+
+    # El subgrafo debe ser conexo.
+    ady = {}
+    for a, b, _ in sub:
+        ady.setdefault(a, set()).add(b)
+        ady.setdefault(b, set()).add(a)
+    inicio = next(iter(ady))
+    vistos = {inicio}
+    cola = [inicio]
+    while cola:
+        nodo = cola.pop()
+        for vecino in ady[nodo]:
+            if vecino not in vistos:
+                vistos.add(vecino)
+                cola.append(vecino)
+    assert vistos == set(ady)
+
+
 def test_benchmark_devuelve_tiempos(parquet):
     con = abrir()
     base = extraer_base(con, parquet, 10)
@@ -85,3 +115,27 @@ def test_benchmark_devuelve_tiempos(parquet):
     }
     for f in filas:
         assert f["tiempo"] is None or f["tiempo"] >= 0
+
+
+def test_actividad_con_block_number(tmp_path):
+    ruta = tmp_path / "bloques.parquet"
+    con = abrir()
+    con.execute(
+        "CREATE TABLE t ("
+        "from_address VARCHAR, to_address VARCHAR, value DOUBLE, "
+        "token_address VARCHAR, block_number BIGINT)"
+    )
+    con.executemany(
+        "INSERT INTO t VALUES (?, ?, ?, ?, ?)",
+        [
+            ("A", "B", 1.0, "0xtoken", 6525201),
+            ("B", "C", 1.0, "0xtoken", 6525201),
+            ("C", "A", 1.0, "0xtoken", 7000000),
+        ],
+    )
+    con.execute(f"COPY t TO '{ruta}' (FORMAT PARQUET)")
+    con.close()
+
+    datos = estadisticas(abrir(), str(ruta))
+    assert datos["actividad"] is not None
+    assert len(datos["actividad"]) >= 2

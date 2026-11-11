@@ -55,6 +55,40 @@ def test_modularidad_grafo_sin_aristas():
     assert modularidad({"A": []}, {"A": 0}) == 0.0
 
 
+def test_modularidad_una_sola_comunidad_es_cero():
+    # Si todos los nodos están en la misma comunidad, Q debe ser 0.
+    adj = {
+        "A": [("B", 3.0)],
+        "B": [("A", 3.0), ("C", 1.0)],
+        "C": [("B", 1.0)],
+    }
+    comunidades = {"A": 0, "B": 0, "C": 0}
+    assert abs(modularidad(adj, comunidades)) < 1e-12
+
+
+def test_modularidad_coincide_con_la_formula_clasica():
+    # Comparamos la versión por comunidad con la suma directa sobre pares.
+    adj = {
+        "A": [("B", 3.0), ("C", 1.0)],
+        "B": [("A", 3.0)],
+        "C": [("A", 1.0), ("D", 2.0)],
+        "D": [("C", 2.0)],
+    }
+    comunidades = {"A": 0, "B": 0, "C": 1, "D": 1}
+
+    grados = {v: sum(w for _, w in adj.get(v, [])) for v in adj}
+    m = sum(grados.values()) / 2.0
+    esperado = 0.0
+    for i in adj:
+        for j in adj:
+            a_ij = sum(w for v, w in adj.get(i, []) if v == j)
+            if comunidades[i] == comunidades[j]:
+                esperado += a_ij - grados[i] * grados[j] / (2.0 * m)
+    esperado /= 2.0 * m
+
+    assert abs(modularidad(adj, comunidades) - esperado) < 1e-12
+
+
 # ---------- Louvain ----------
 
 def test_louvain_separa_dos_cliques():

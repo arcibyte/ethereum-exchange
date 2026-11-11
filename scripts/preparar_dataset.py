@@ -1,12 +1,12 @@
 """
 preparar_dataset.py
 ===================
-Preprocesa el dataset grande de transferencias (~8 GB) para poder usarlo en el
-proyecto sin reventar la memoria de Colab.
+Preprocesa el dataset grande de transferencias (~8,3 GB) para poder usarlo en
+el proyecto sin reventar la memoria de Colab.
 
 La idea es la misma que ya habías usado antes: "precargar" el CSV en un formato
-binario comprimido. El CSV pesa ~8 GB porque es texto; en Parquet con
-compresión ZSTD baja a ~2.3 GB y se puede consultar sin cargarlo todo en RAM.
+binario comprimido. El CSV pesa ~8,3 GB porque es texto; en Parquet con
+compresión ZSTD baja a ~0,8 GB y se puede consultar sin cargarlo todo en RAM.
 
 Comandos
 --------
@@ -14,7 +14,8 @@ Comandos
 
     python scripts/preparar_dataset.py convertir \
         --entrada /ruta/transferencias.csv \
-        --salida data/procesado/transferencias.parquet
+        --salida data/procesado/transferencias.parquet \
+        --memoria 2GB --temporal data/procesado/tmp
 
 2) Generar una muestra manejable para el notebook:
 
@@ -51,6 +52,7 @@ CANDIDATOS = {
     "value": ["value", "amount", "token_amount", "quantity", "val"],
     "token": ["token_address", "contract_address", "token", "tokenaddress"],
     "time": ["block_timestamp", "timestamp", "block_time", "date", "time"],
+    "block": ["block_number", "block"],
 }
 
 
@@ -66,7 +68,7 @@ def _fuente(ruta: str) -> str:
     return f"read_csv_auto({_sql_texto(ruta)}, header=true)"
 
 
-def _conectar():
+def _conectar(memoria: str | None = None, temporal: str | None = None):
     try:
         import duckdb
     except ImportError as exc:  # pragma: no cover
@@ -74,7 +76,16 @@ def _conectar():
             "Falta duckdb. Instálalo con:\n"
             "    pip install -r requirements-datos.txt"
         ) from exc
-    return duckdb.connect()
+
+    con = duckdb.connect()
+    # En máquinas con poca RAM conviene limitar DuckDB y darle un directorio
+    # temporal en disco para que pueda derramar datos sin morir.
+    if memoria:
+        con.execute(f"SET memory_limit = {_sql_texto(memoria)}")
+    if temporal:
+        Path(temporal).mkdir(parents=True, exist_ok=True)
+        con.execute(f"SET temp_directory = {_sql_texto(temporal)}")
+    return con
 
 
 def _columnas(con, ruta: str) -> list[str]:
@@ -108,8 +119,8 @@ def _exigir_columnas(mapa: dict[str, str | None], columnas: list[str]) -> None:
 
 
 def convertir(args: argparse.Namespace) -> None:
-    """Convierte el CSV grande a Parquet comprimido (~8 GB -> ~2.3 GB)."""
-    con = _conectar()
+    """Convierte el CSV grande a Parquet comprimido (~8,3 GB -> ~0,8 GB)."""
+    con = _conectar(args.memoria, args.temporal)
     columnas = _columnas(con, args.entrada)
     mapa = _mapear(columnas)
     _exigir_columnas(mapa, columnas)
@@ -128,6 +139,10 @@ def convertir(args: argparse.Namespace) -> None:
         columnas_select.append(f'CAST("{mapa["token"]}" AS VARCHAR) AS token_address')
     if mapa["time"] and mapa["time"] not in (mapa["from"], mapa["to"], mapa["value"]):
         columnas_select.append(f'CAST("{mapa["time"]}" AS VARCHAR) AS block_timestamp')
+    # El dataset original trae `block_number` (no timestamp). Lo conservamos
+    # para poder filtrar por rango de bloques sin volver a leer el CSV.
+    if mapa.get("block") and mapa["block"] not in (mapa["from"], mapa["to"], mapa["value"]):
+        columnas_select.append(f'CAST("{mapa["block"]}" AS BIGINT) AS block_number')
 
     select = ", ".join(columnas_select)
     consulta = (
@@ -268,6 +283,10 @@ def main() -> None:
     p_conv = sub.add_parser("convertir", help="CSV grande -> Parquet comprimido")
     p_conv.add_argument("--entrada", required=True)
     p_conv.add_argument("--salida", required=True)
+    p_conv.add_argument("--memoria", default="2GB",
+                        help="límite de memoria de DuckDB (ej. 2GB)")
+    p_conv.add_argument("--temporal", default=None,
+                        help="directorio temporal en disco para DuckDB")
     p_conv.set_defaults(func=convertir)
 
     p_mues = sub.add_parser("muestra", help="Generar una muestra manejable")
