@@ -73,7 +73,7 @@ proyecto/
 │   ├── test_grafo.py
 │   └── test_datos.py
 ├── notebooks/
-│   ├── Proyecto_Final_Colab.ipynb     <- ENTREGABLE único (autocontenido)
+│   ├── Proyecto_Final_Colab.ipynb     <- ENTREGABLE único (carga datos de Drive/local)
 │   ├── Proyecto_Teoria_Grafos.ipynb   <- versión modular para desarrollo
 │   └── Preparar_Dataset_Colab.ipynb   <- herramienta para procesar el CSV grande
 ├── scripts/
@@ -106,14 +106,29 @@ El entregable es **un solo notebook**:
 notebooks/Proyecto_Final_Colab.ipynb
 ```
 
-Es **autocontenido**: incluye la muestra de datos y el código de los cuatro
-algoritmos en sus propias celdas. No necesita clonar el repositorio ni
-instalar módulos del proyecto.
+Incluye el código de los cuatro algoritmos en sus propias celdas y **carga
+los datos desde Google Drive o desde `data/` en local**. El profesor debe
+subir el paquete de datos a `Mi unidad/ED2/`:
 
-1. Abre `notebooks/Proyecto_Final_Colab.ipynb` en Colab.
-2. Ejecuta las celdas en orden.
-3. La sección final usa el Parquet completo si está en Drive
-   (`Mi unidad/ED2/transferencias.parquet`); si no está, se omite.
+```
+ED2/
+├── transferencias.parquet
+├── muestra/
+│   ├── transferencias_2k.csv
+│   └── etiquetas.csv
+└── real/
+    ├── softchaincoin.csv
+    └── exchange_labels.csv
+```
+
+1. Sube esos archivos a `Mi unidad/ED2/`.
+2. Abre `notebooks/Proyecto_Final_Colab.ipynb` en Colab.
+3. Ejecuta la celda **“Montar Google Drive”**.
+4. Ejecuta las celdas en orden.
+
+Si falta la muestra, el notebook la genera desde el Parquet. Si falta el
+Parquet, las tareas no pueden correr. La Sección 1 necesita la carpeta
+`real/`.
 
 ### Google Colab — versión modular (desarrollo)
 

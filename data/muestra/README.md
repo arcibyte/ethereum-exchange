@@ -1,6 +1,6 @@
 # Muestra conectada para los algoritmos
 
-Esta carpeta contiene la muestra que usa el notebook en la Sección 1:
+Esta carpeta contiene la muestra que usan las Tareas 1–4:
 
 | Archivo | Descripción |
 |---|---|

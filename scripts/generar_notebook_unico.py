@@ -1,7 +1,4 @@
-import base64
-import gzip
 import json
-import textwrap
 import uuid
 from pathlib import Path
 
@@ -37,25 +34,14 @@ def code(texto):
     }
 
 
-# ---------- datos embebidos ----------
-csv_bytes = (RAIZ / "data/muestra/transferencias_2k.csv").read_bytes()
-b64 = base64.b64encode(gzip.compress(csv_bytes, 9)).decode("ascii")
-b64 = "\n".join(textwrap.wrap(b64, 100))
-etiquetas_csv = (RAIZ / "data/muestra/etiquetas.csv").read_text(encoding="utf-8")
+seccion1_md = "## 3. Sección 1 — Descripción y preparación del dataset\n\n**Responsable:** Pablo Álvarez\n\nEl dataset es **Ethereum Exchanges (AlphaCore)** de Stanford SNAP:\n\n| Dato | Valor |\n|---|---|\n| Contenido | 28 redes de tokens ERC-20 (una por token) |\n| Transferencias | ~38,9 millones |\n| Tamaño CSV | ~8,3 GB |\n| Periodo | 16-oct-2018 a 04-may-2020 |\n| Etiquetas | 296 exchanges: 247 `cex` y 49 `dex` |\n\nCada fila es un evento `Transfer(from, to, value)` de un contrato ERC-20.\n`value` está en la **unidad mínima de cada token**, así que no se pueden sumar\nmontos de tokens distintos.\n\n### Decisiones de modelado\n\n1. **Un grafo por token.** Mezclar USDC (6 decimales) con DAI (18) no tiene\n   sentido.\n2. **Limpieza igual a la del paper AlphaCore:**\n   - quitar valores ≤ 0;\n   - quitar “polvo”: valor < valor máximo del token / \\(10^{10}\\);\n   - quitar autolazos;\n   - conservar la dirección cero (mint/burn) y reportarla aparte.\n3. **Agregar transferencias repetidas** del mismo par en una sola arista:\n   `value` = suma, `n_transferencias` = cuántas fueron.\n\nEsta sección lee los archivos reales:\n\n```\nMi unidad/ED2/real/softchaincoin.csv\nMi unidad/ED2/real/exchange_labels.csv\n```\n\nSi no existen, la celda se detiene con un mensaje claro. SoftChainCoin es una\nred real pequeña; las tareas 1–4 usan la muestra de USDC.\n"
+seccion1_code = "# ============ SECCIÓN 1: DESCRIPCIÓN Y LIMPIEZA DEL DATASET ============\nimport csv\nimport math\nfrom collections import defaultdict, deque\n\nimport matplotlib.pyplot as plt\n\nif not RUTA_SOFTCHAIN or not RUTA_LABELS:\n    print(\"Sección 1 omitida: faltan real/softchaincoin.csv y real/exchange_labels.csv.\")\n    grafo_s1 = None\nelse:\n    # Etiquetas reales de exchanges\n    exchanges = {}\n    with open(RUTA_LABELS, newline=\"\", encoding=\"latin-1\") as fh:\n        for fila in csv.DictReader(fh):\n            exchanges[fila[\"address\"].strip().lower()] = {\n                \"nombre\": fila[\"name\"].strip(),\n                \"tipo\": fila[\"type\"].strip(),\n            }\n\n    # Transferencias crudas de SoftChainCoin\n    filas = []\n    with open(RUTA_SOFTCHAIN, newline=\"\", encoding=\"utf-8\") as fh:\n        for fila in csv.DictReader(fh):\n            filas.append((\n                fila[\"from_address\"].strip().lower(),\n                fila[\"to_address\"].strip().lower(),\n                float(fila[\"value\"]),\n                int(fila[\"block_number\"]),\n            ))\n\n    # Reglas de limpieza del paper AlphaCore\n    CERO = \"0x0000000000000000000000000000000000000000\"\n    vmax = max(v for _, _, v, _ in filas)\n    umbral = vmax / 1e10\n    aristas = {}\n    reporte = {\n        \"leidas\": len(filas),\n        \"valor_cero\": 0,\n        \"polvo\": 0,\n        \"autolazos\": 0,\n        \"direccion_cero\": 0,\n        \"conservadas\": 0,\n    }\n    for origen, destino, valor, bloque in filas:\n        if valor <= 0:\n            reporte[\"valor_cero\"] += 1\n            continue\n        if valor < umbral:\n            reporte[\"polvo\"] += 1\n            continue\n        if origen == destino:\n            reporte[\"autolazos\"] += 1\n            continue\n        if origen == CERO or destino == CERO:\n            reporte[\"direccion_cero\"] += 1\n        clave = (origen, destino)\n        if clave not in aristas:\n            aristas[clave] = [0.0, 0]\n        aristas[clave][0] += valor\n        aristas[clave][1] += 1\n    reporte[\"conservadas\"] = len(aristas)\n\n    # Construir el grafo limpio de la sección 1\n    grafo_s1 = Grafo()\n    for (origen, destino), (valor, n) in aristas.items():\n        grafo_s1._agregar_arista(origen, destino, valor, limpiar=False)\n    grafo_s1.etiquetas = exchanges\n\n    print(\"SoftChainCoin — transferencias crudas:\", reporte[\"leidas\"])\n    for clave in [\"valor_cero\", \"polvo\", \"autolazos\", \"direccion_cero\"]:\n        print(f\"  {clave:<15}: {reporte[clave]:,}\")\n    print(f\"  aristas únicas : {reporte['conservadas']:,}\")\n    print(f\"  grafo          : {len(grafo_s1.nodos):,} nodos, {len(grafo_s1.aristas):,} aristas\")\n\n\n    def perfil(g):\n        \"\"\"Resumen estructural de un grafo dirigido.\"\"\"\n        n = len(g.nodos)\n        m = len(g.aristas)\n        densidad = m / (n * (n - 1)) if n > 1 else 0.0\n        pares = {(a, b) for a, b, _ in g.aristas}\n        reciprocidad = (\n            sum(1 for a, b in pares if (b, a) in pares) / len(pares) if pares else 0.0\n        )\n        ady = defaultdict(set)\n        for a, b, _ in g.aristas:\n            ady[a].add(b)\n            ady[b].add(a)\n        vistos = set()\n        componentes = 0\n        mayor = 0\n        for inicio in ady:\n            if inicio in vistos:\n                continue\n            componentes += 1\n            cola = deque([inicio])\n            vistos.add(inicio)\n            tam = 0\n            while cola:\n                u = cola.popleft()\n                tam += 1\n                for v in ady[u]:\n                    if v not in vistos:\n                        vistos.add(v)\n                        cola.append(v)\n            mayor = max(mayor, tam)\n        origenes = {a for a, _, _ in g.aristas}\n        destinos = {b for _, b, _ in g.aristas}\n        return {\n            \"nodos\": n,\n            \"aristas\": m,\n            \"densidad\": densidad,\n            \"reciprocidad\": reciprocidad,\n            \"componentes\": componentes,\n            \"componente_mayor\": mayor,\n            \"fuentes\": sum(1 for v in g.nodos if v not in destinos),\n            \"sumideros\": sum(1 for v in g.nodos if v not in origenes),\n        }\n\n\n    def grados(aristas):\n        entrada = defaultdict(int)\n        salida = defaultdict(int)\n        for a, b, _ in aristas:\n            salida[a] += 1\n            entrada[b] += 1\n        return dict(entrada), dict(salida)\n\n\n    p = perfil(grafo_s1)\n    for clave, valor in p.items():\n        texto = f\"{valor:.4f}\" if isinstance(valor, float) else f\"{valor:,}\"\n        print(f\"  {clave:<18} {texto}\")\n\n    entrada, salida = grados(grafo_s1.aristas)\n\n\n    def frecuencias(grado):\n        conteo = {}\n        for g in grado.values():\n            if g > 0:\n                conteo[g] = conteo.get(g, 0) + 1\n        return sorted(conteo.items())\n\n\n    fig, ejes = plt.subplots(1, 2, figsize=(12, 4))\n    for g, etiqueta, color in [(entrada, \"entrada\", \"steelblue\"), (salida, \"salida\", \"darkorange\")]:\n        xs, ys = zip(*frecuencias(g))\n        ejes[0].loglog(xs, ys, \"o\", label=f\"grado de {etiqueta}\", color=color, alpha=0.8)\n    ejes[0].set_xlabel(\"Grado\")\n    ejes[0].set_ylabel(\"Número de nodos\")\n    ejes[0].set_title(\"Distribución de grados (log-log)\")\n    ejes[0].legend()\n\n    montos = [v for _, _, v, _ in filas if v > 0]\n    ejes[1].hist([math.log10(v) for v in montos], bins=30, color=\"seagreen\", edgecolor=\"white\")\n    ejes[1].set_xlabel(\"log10(valor en unidad mínima del token)\")\n    ejes[1].set_ylabel(\"Frecuencia\")\n    ejes[1].set_title(\"Monto por transferencia\")\n    plt.tight_layout()\n    plt.show()\n\n    # Exchanges presentes y línea base por grado\n    presentes = {a: info for a, info in exchanges.items() if a in grafo_s1.nodos}\n    total = {v: entrada.get(v, 0) + salida.get(v, 0) for v in grafo_s1.nodos}\n\n    print()\n    print(f\"Exchanges etiquetados presentes: {len(presentes)} de {len(exchanges)}\")\n    print()\n    print(f\"{'nombre':<24}{'tipo':<6}{'entrada':>9}{'salida':>8}{'percentil':>11}\")\n    for addr in sorted(presentes, key=lambda a: -total[a]):\n        info = presentes[addr]\n        pct = 100 * sum(1 for x in total.values() if x < total[addr]) / max(1, len(total) - 1)\n        print(f\"{info['nombre'][:22]:<24}{info['tipo']:<6}{entrada.get(addr,0):>9}{salida.get(addr,0):>8}{pct:>10.1f}%\")\n\n\n    def ranking(puntajes, mayor_es_mejor=True):\n        signo = -1.0 if mayor_es_mejor else 1.0\n        return sorted(puntajes, key=lambda n: (signo * puntajes[n], n))\n\n\n    def evaluar(puntajes, relevantes, ks):\n        presentes_rel = {n for n in relevantes if n in puntajes}\n        orden = ranking(puntajes)\n        filas_eval = []\n        for k in ks:\n            enc = sum(1 for n in orden[:k] if n in presentes_rel)\n            filas_eval.append((\n                k,\n                enc,\n                enc / k if k else 0.0,\n                enc / len(presentes_rel) if presentes_rel else 0.0,\n            ))\n        return filas_eval\n\n\n    if presentes:\n        ks = [k for k in (10, 20, 50, 100) if k <= len(grafo_s1.nodos)]\n        print()\n        print(\"Línea base (precisión@k / recall@k) ordenando por grado:\")\n        print(f\"{'puntaje':<16}\" + \"\".join(f\"{'k=' + str(k):>14}\" for k in ks))\n        for nombre, puntaje in [(\"grado total\", total), (\"grado entrada\", entrada), (\"grado salida\", salida)]:\n            filas_eval = evaluar(puntaje, presentes, ks)\n            print(f\"{nombre:<16}\" + \"\".join(f\"{f[2]:>7.2f} / {f[3]:<4.2f}\" for f in filas_eval))\n    else:\n        print(\"SoftChainCoin no tiene exchanges etiquetados en esta muestra.\")\n"
 
-# ---------- datos pequeños de la Sección 1 (Pablo) ----------
-s1_raw_bytes = (RAIZ / "data/real/softchaincoin.csv").read_bytes()
-s1_raw_b64 = base64.b64encode(gzip.compress(s1_raw_bytes, 9)).decode("ascii")
-s1_raw_b64 = "\n".join(textwrap.wrap(s1_raw_b64, 100))
-s1_labels_bytes = (RAIZ / "data/real/exchange_labels.csv").read_bytes()
-s1_labels_b64 = base64.b64encode(gzip.compress(s1_labels_bytes, 9)).decode("ascii")
-s1_labels_b64 = "\n".join(textwrap.wrap(s1_labels_b64, 100))
+carga_md = "## 2. Carga de datos\n\nEl profesor debe subir el paquete de datos a:\n\n```\nMi unidad/ED2/\n├── transferencias.parquet\n├── muestra/\n│   ├── transferencias_2k.csv\n│   └── etiquetas.csv\n└── real/\n    ├── softchaincoin.csv\n    └── exchange_labels.csv\n```\n\nLa celda busca primero esas rutas de Drive y luego `data/` en local.\n\n- Si existe `muestra/transferencias_2k.csv`, carga esa muestra.\n- Si no existe, genera la muestra de USDC desde el Parquet.\n- Si no existe el Parquet, las tareas 1–4 no pueden correr.\n- La Sección 1 necesita `real/softchaincoin.csv` y `real/exchange_labels.csv`.\n"
+carga_datos = "# ============ RUTAS Y CARGA DE DATOS ============\nimport os\nfrom collections import defaultdict, deque\n\n# Carpeta del dataset en Drive y en local.\nCARPETA_DRIVE = \"/content/drive/MyDrive/ED2\"\nCARPETA_LOCAL = \"data\"\n\nUSDC = \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"\nCERO = \"0x0000000000000000000000000000000000000000\"\n\n\ndef buscar_archivo(*rutas):\n    \"\"\"Devuelve la primera ruta que exista, o None si no existe ninguna.\"\"\"\n    for ruta in rutas:\n        if ruta and os.path.isfile(ruta):\n            return ruta\n    return None\n\n\nRUTA_PARQUET = buscar_archivo(\n    f\"{CARPETA_DRIVE}/transferencias.parquet\",\n    f\"{CARPETA_DRIVE}/procesado/transferencias.parquet\",\n    f\"{CARPETA_LOCAL}/procesado/transferencias.parquet\",\n)\nRUTA_MUESTRA = buscar_archivo(\n    f\"{CARPETA_DRIVE}/muestra/transferencias_2k.csv\",\n    f\"{CARPETA_LOCAL}/muestra/transferencias_2k.csv\",\n)\nRUTA_ETIQUETAS_MUESTRA = buscar_archivo(\n    f\"{CARPETA_DRIVE}/muestra/etiquetas.csv\",\n    f\"{CARPETA_LOCAL}/muestra/etiquetas.csv\",\n)\nRUTA_SOFTCHAIN = buscar_archivo(\n    f\"{CARPETA_DRIVE}/real/softchaincoin.csv\",\n    f\"{CARPETA_LOCAL}/real/softchaincoin.csv\",\n)\nRUTA_LABELS = buscar_archivo(\n    f\"{CARPETA_DRIVE}/real/exchange_labels.csv\",\n    f\"{CARPETA_LOCAL}/real/exchange_labels.csv\",\n)\n\nprint(\"Rutas encontradas:\")\nprint(\"  Parquet          :\", RUTA_PARQUET)\nprint(\"  Muestra          :\", RUTA_MUESTRA)\nprint(\"  Etiquetas muestra:\", RUTA_ETIQUETAS_MUESTRA)\nprint(\"  SoftChainCoin    :\", RUTA_SOFTCHAIN)\nprint(\"  Etiquetas reales :\", RUTA_LABELS)\n\n\ndef componente_mayor(aristas):\n    \"\"\"Conserva solo las aristas de la componente conexa más grande.\"\"\"\n    adyacencia = defaultdict(set)\n    for origen, destino, _ in aristas:\n        adyacencia[origen].add(destino)\n        adyacencia[destino].add(origen)\n\n    visitados = set()\n    mejor = set()\n\n    for inicio in adyacencia:\n        if inicio in visitados:\n            continue\n\n        componente = set()\n        cola = deque([inicio])\n        visitados.add(inicio)\n\n        while cola:\n            nodo = cola.popleft()\n            componente.add(nodo)\n            for vecino in adyacencia[nodo]:\n                if vecino not in visitados:\n                    visitados.add(vecino)\n                    cola.append(vecino)\n\n        if len(componente) > len(mejor):\n            mejor = componente\n\n    return [\n        (origen, destino, peso)\n        for origen, destino, peso in aristas\n        if origen in mejor and destino in mejor\n    ]\n\n\ndef muestra_desde_parquet(ruta):\n    \"\"\"Genera la muestra de USDC desde el Parquet si no existe el CSV.\"\"\"\n    try:\n        import duckdb\n    except ImportError:\n        import subprocess\n        import sys\n        subprocess.run(\n            [sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"duckdb\", \"pyarrow\"],\n            check=True,\n        )\n        import duckdb\n\n    con = duckdb.connect()\n    con.execute(\"SET memory_limit='2GB'\")\n    con.execute(\"SET threads=2\")\n\n    filas = con.execute(\n        \"\"\"\n        SELECT from_address, to_address, value\n        FROM read_parquet(?)\n        WHERE token_address = ?\n        USING SAMPLE reservoir(65000 ROWS) REPEATABLE (42)\n        \"\"\",\n        [ruta, USDC],\n    ).fetchall()\n\n    aristas = []\n    for origen, destino, valor in filas:\n        origen = str(origen).lower()\n        destino = str(destino).lower()\n        valor = float(valor) / 1e6\n\n        if not origen or not destino or origen == destino:\n            continue\n        if origen == CERO or destino == CERO:\n            continue\n        if valor <= 0:\n            continue\n\n        aristas.append((origen, destino, valor))\n\n    return componente_mayor(aristas)\n\n\n# Construir el grafo de trabajo de las tareas 1-4.\nif RUTA_MUESTRA is not None:\n    grafo = cargar_grafo(RUTA_MUESTRA, etiquetas=RUTA_ETIQUETAS_MUESTRA)\n    print()\n    print(\"Grafo de trabajo: muestra preparada\")\nelif RUTA_PARQUET is not None:\n    aristas = muestra_desde_parquet(RUTA_PARQUET)\n    grafo = Grafo()\n    for origen, destino, peso in aristas:\n        grafo._agregar_arista(origen, destino, peso, limpiar=False)\n\n    if RUTA_ETIQUETAS_MUESTRA is not None:\n        grafo.cargar_etiquetas(RUTA_ETIQUETAS_MUESTRA)\n    elif RUTA_LABELS is not None:\n        grafo.cargar_etiquetas(RUTA_LABELS)\n\n    print()\n    print(\"Grafo de trabajo: muestra generada desde el Parquet\")\nelse:\n    raise FileNotFoundError(\n        \"No encontré la muestra ni el Parquet. Sube el dataset a \"\n        \"Mi unidad/ED2 o revisa las rutas.\"\n    )\n\nprint(\"  nodos    :\", len(grafo.nodos))\nprint(\"  aristas  :\", len(grafo.aristas))\nprint(\"  etiquetas:\", len(grafo.etiquetas))\nprint(\"  resumen  :\", grafo.resumen())\n"
 
-seccion1_md = "## Sección 1 — Descripción y preparación del dataset\n\n**Responsable:** Pablo Álvarez\n\nEl dataset es **Ethereum Exchanges (AlphaCore)** de Stanford SNAP:\n\n| Dato | Valor |\n|---|---|\n| Contenido | 28 redes de tokens ERC-20 (una por token) |\n| Transferencias | ~38,9 millones |\n| Tamaño CSV | ~8,3 GB |\n| Periodo | 16-oct-2018 a 04-may-2020 |\n| Etiquetas | 296 exchanges: 247 `cex` y 49 `dex` |\n\nCada fila es un evento `Transfer(from, to, value)` de un contrato ERC-20.\n`value` está en la **unidad mínima de cada token**, así que no se pueden sumar\nmontos de tokens distintos.\n\n### Decisiones de modelado\n\n1. **Un grafo por token.** Mezclar USDC (6 decimales) con DAI (18) no tiene\n   sentido.\n2. **Limpieza igual a la del paper AlphaCore:**\n   - quitar valores ≤ 0;\n   - quitar “polvo”: valor < valor máximo del token / \\(10^{10}\\);\n   - quitar autolazos;\n   - conservar la dirección cero (mint/burn) y reportarla aparte.\n3. **Agregar transferencias repetidas** del mismo par en una sola arista:\n   `value` = suma, `n_transferencias` = cuántas fueron.\n\nAquí se muestra con **SoftChainCoin**, una red real pequeña que usan los\nautores del dataset. Las tareas 1–4 usan la muestra de USDC porque tiene más\nexchanges y comunidades.\n"
-seccion1_code = "# ============ SECCIÓN 1: DESCRIPCIÓN Y LIMPIEZA DEL DATASET ============\nimport base64\nimport csv\nimport gzip\nimport io\nimport math\nfrom collections import defaultdict, deque\n\nimport matplotlib.pyplot as plt\n\nRAW_B64 = \"\"\"\n__S1_RAW__\n\"\"\"\nLABELS_B64 = \"\"\"\n__S1_LABELS__\n\"\"\"\n\nraw_text = gzip.decompress(base64.b64decode(RAW_B64)).decode(\"utf-8\")\nlabels_text = gzip.decompress(base64.b64decode(LABELS_B64)).decode(\"utf-8\")\n\n# Etiquetas reales de exchanges\nexchanges = {}\nfor fila in csv.DictReader(io.StringIO(labels_text.strip())):\n    exchanges[fila[\"address\"].strip().lower()] = {\n        \"nombre\": fila[\"name\"].strip(),\n        \"tipo\": fila[\"type\"].strip(),\n    }\n\n# Transferencias crudas de SoftChainCoin\nfilas = []\nfor fila in csv.DictReader(io.StringIO(raw_text.strip())):\n    filas.append((\n        fila[\"from_address\"].strip().lower(),\n        fila[\"to_address\"].strip().lower(),\n        float(fila[\"value\"]),\n        int(fila[\"block_number\"]),\n    ))\n\n# Reglas de limpieza del paper AlphaCore\nCERO = \"0x0000000000000000000000000000000000000000\"\nvmax = max(v for _, _, v, _ in filas)\numbral = vmax / 1e10\naristas = {}\nreporte = {\n    \"leidas\": len(filas),\n    \"valor_cero\": 0,\n    \"polvo\": 0,\n    \"autolazos\": 0,\n    \"direccion_cero\": 0,\n    \"conservadas\": 0,\n}\nfor origen, destino, valor, bloque in filas:\n    if valor <= 0:\n        reporte[\"valor_cero\"] += 1\n        continue\n    if valor < umbral:\n        reporte[\"polvo\"] += 1\n        continue\n    if origen == destino:\n        reporte[\"autolazos\"] += 1\n        continue\n    if origen == CERO or destino == CERO:\n        reporte[\"direccion_cero\"] += 1\n    clave = (origen, destino)\n    if clave not in aristas:\n        aristas[clave] = [0.0, 0]\n    aristas[clave][0] += valor\n    aristas[clave][1] += 1\nreporte[\"conservadas\"] = len(aristas)\n\n# Construir el grafo limpio de la sección 1\ngrafo_s1 = Grafo()\nfor (origen, destino), (valor, n) in aristas.items():\n    grafo_s1._agregar_arista(origen, destino, valor, limpiar=False)\ngrafo_s1.etiquetas = exchanges\n\nprint(\"SoftChainCoin — transferencias crudas:\", reporte[\"leidas\"])\nfor clave in [\"valor_cero\", \"polvo\", \"autolazos\", \"direccion_cero\"]:\n    print(f\"  {clave:<15}: {reporte[clave]:,}\")\nprint(f\"  aristas únicas : {reporte['conservadas']:,}\")\nprint(f\"  grafo          : {len(grafo_s1.nodos):,} nodos, {len(grafo_s1.aristas):,} aristas\")\n\n\ndef perfil(g):\n    \"\"\"Resumen estructural de un grafo dirigido.\"\"\"\n    n = len(g.nodos)\n    m = len(g.aristas)\n    densidad = m / (n * (n - 1)) if n > 1 else 0.0\n    pares = {(a, b) for a, b, _ in g.aristas}\n    reciprocidad = (\n        sum(1 for a, b in pares if (b, a) in pares) / len(pares) if pares else 0.0\n    )\n    ady = defaultdict(set)\n    for a, b, _ in g.aristas:\n        ady[a].add(b)\n        ady[b].add(a)\n    vistos = set()\n    componentes = 0\n    mayor = 0\n    for inicio in ady:\n        if inicio in vistos:\n            continue\n        componentes += 1\n        cola = deque([inicio])\n        vistos.add(inicio)\n        tam = 0\n        while cola:\n            u = cola.popleft()\n            tam += 1\n            for v in ady[u]:\n                if v not in vistos:\n                    vistos.add(v)\n                    cola.append(v)\n        mayor = max(mayor, tam)\n    origenes = {a for a, _, _ in g.aristas}\n    destinos = {b for _, b, _ in g.aristas}\n    return {\n        \"nodos\": n,\n        \"aristas\": m,\n        \"densidad\": densidad,\n        \"reciprocidad\": reciprocidad,\n        \"componentes\": componentes,\n        \"componente_mayor\": mayor,\n        \"fuentes\": sum(1 for v in g.nodos if v not in destinos),\n        \"sumideros\": sum(1 for v in g.nodos if v not in origenes),\n    }\n\n\ndef grados(aristas):\n    entrada = defaultdict(int)\n    salida = defaultdict(int)\n    for a, b, _ in aristas:\n        salida[a] += 1\n        entrada[b] += 1\n    return dict(entrada), dict(salida)\n\n\np = perfil(grafo_s1)\nfor clave, valor in p.items():\n    texto = f\"{valor:.4f}\" if isinstance(valor, float) else f\"{valor:,}\"\n    print(f\"  {clave:<18} {texto}\")\n\nentrada, salida = grados(grafo_s1.aristas)\n\n\ndef frecuencias(grado):\n    conteo = {}\n    for g in grado.values():\n        if g > 0:\n            conteo[g] = conteo.get(g, 0) + 1\n    return sorted(conteo.items())\n\n\nfig, ejes = plt.subplots(1, 2, figsize=(12, 4))\nfor g, etiqueta, color in [(entrada, \"entrada\", \"steelblue\"), (salida, \"salida\", \"darkorange\")]:\n    xs, ys = zip(*frecuencias(g))\n    ejes[0].loglog(xs, ys, \"o\", label=f\"grado de {etiqueta}\", color=color, alpha=0.8)\nejes[0].set_xlabel(\"Grado\")\nejes[0].set_ylabel(\"Número de nodos\")\nejes[0].set_title(\"Distribución de grados (log-log)\")\nejes[0].legend()\n\nmontos = [v for _, _, v, _ in filas if v > 0]\nejes[1].hist([math.log10(v) for v in montos], bins=30, color=\"seagreen\", edgecolor=\"white\")\nejes[1].set_xlabel(\"log10(valor en unidad mínima del token)\")\nejes[1].set_ylabel(\"Frecuencia\")\nejes[1].set_title(\"Monto por transferencia\")\nplt.tight_layout()\nplt.show()\n\n# Exchanges presentes y línea base por grado\npresentes = {a: info for a, info in exchanges.items() if a in grafo_s1.nodos}\ntotal = {v: entrada.get(v, 0) + salida.get(v, 0) for v in grafo_s1.nodos}\n\nprint()\nprint(f\"Exchanges etiquetados presentes: {len(presentes)} de {len(exchanges)}\")\nprint()\nprint(f\"{'nombre':<24}{'tipo':<6}{'entrada':>9}{'salida':>8}{'percentil':>11}\")\nfor addr in sorted(presentes, key=lambda a: -total[a]):\n    info = presentes[addr]\n    pct = 100 * sum(1 for x in total.values() if x < total[addr]) / max(1, len(total) - 1)\n    print(f\"{info['nombre'][:22]:<24}{info['tipo']:<6}{entrada.get(addr,0):>9}{salida.get(addr,0):>8}{pct:>10.1f}%\")\n\n\ndef ranking(puntajes, mayor_es_mejor=True):\n    signo = -1.0 if mayor_es_mejor else 1.0\n    return sorted(puntajes, key=lambda n: (signo * puntajes[n], n))\n\n\ndef evaluar(puntajes, relevantes, ks):\n    presentes_rel = {n for n in relevantes if n in puntajes}\n    orden = ranking(puntajes)\n    filas_eval = []\n    for k in ks:\n        enc = sum(1 for n in orden[:k] if n in presentes_rel)\n        filas_eval.append((\n            k,\n            enc,\n            enc / k if k else 0.0,\n            enc / len(presentes_rel) if presentes_rel else 0.0,\n        ))\n    return filas_eval\n\n\nif presentes:\n    ks = [k for k in (10, 20, 50, 100) if k <= len(grafo_s1.nodos)]\n    print()\n    print(\"Línea base (precisión@k / recall@k) ordenando por grado:\")\n    print(f\"{'puntaje':<16}\" + \"\".join(f\"{'k=' + str(k):>14}\" for k in ks))\n    for nombre, puntaje in [(\"grado total\", total), (\"grado entrada\", entrada), (\"grado salida\", salida)]:\n        filas_eval = evaluar(puntaje, presentes, ks)\n        print(f\"{nombre:<16}\" + \"\".join(f\"{f[2]:>7.2f} / {f[3]:<4.2f}\" for f in filas_eval))\nelse:\n    print(\"SoftChainCoin no tiene exchanges etiquetados en esta muestra.\")\n"
-seccion1_code = seccion1_code.replace("__S1_RAW__", s1_raw_b64)
-seccion1_code = seccion1_code.replace("__S1_LABELS__", s1_labels_b64)
-
+drive_md = "## 1. Conectar con Google Drive\n\nEsta celda monta Google Drive para poder leer el dataset desde\n`Mi unidad/ED2/`. En local se salta sola.\n"
+drive_code = "# ============ MONTAR GOOGLE DRIVE (COLAB) ============\ntry:\n    from google.colab import drive\n    drive.mount(\"/content/drive\")\nexcept Exception as exc:\n    print(\"Drive no disponible (normal si estás en local):\", exc)\n"
 
 portada = """
 # Proyecto final — Red de transferencias de Ethereum
@@ -66,9 +52,8 @@ portada = """
 
 ---
 
-Este notebook es **autocontenido**: incluye los datos de la muestra y el
-código de los cuatro algoritmos en sus propias celdas. No necesita clonar el
-repositorio ni instalar módulos del proyecto.
+Este notebook **carga los datos desde Google Drive o desde la carpeta local
+`data/`**. El profesor debe subir el paquete de datos a `Mi unidad/ED2/`.
 
 | Tarea | Pregunta | Algoritmo | Responsable |
 |---|---|---|---|
@@ -77,9 +62,9 @@ repositorio ni instalar módulos del proyecto.
 | 3 | ¿Qué grupos de nodos hay? | Louvain | Emerson Ballesteros |
 | 4 | ¿Cuál es la red mínima? | Kruskal + Union-Find | Grupal |
 
-> **Cómo ejecutar:** en Colab, ejecuta las celdas en orden. La celda de datos
-> ya trae una muestra real de USDC. La última sección usa el Parquet completo
-> si está disponible en Drive.
+> **Cómo ejecutar:** en Colab, ejecuta las celdas en orden. Primero se monta
+> Drive, después se cargan los datos. La última sección analiza el Parquet
+> completo de 38,9 millones de transferencias.
 """
 
 capa_datos_md = """
@@ -93,59 +78,6 @@ Esta celda define la estructura compartida: un grafo dirigido y ponderado.
 
 El resto de celdas usan el mismo objeto `grafo`.
 """
-
-carga_datos = '''
-# ============ DATOS DE LA MUESTRA (embebidos) ============
-# La muestra está comprimida dentro del notebook para que sea autocontenido.
-import base64
-import csv
-import gzip
-import io
-import math
-import random
-
-SAMPLE_B64 = """
-__SAMPLE_B64__
-"""
-
-ETIQUETAS_CSV = """
-__ETIQUETAS_CSV__
-"""
-
-# Decodificar la muestra
-texto_csv = gzip.decompress(base64.b64decode(SAMPLE_B64)).decode("utf-8")
-aristas = []
-for fila in csv.DictReader(io.StringIO(texto_csv)):
-    aristas.append((
-        fila["from_address"].strip().lower(),
-        fila["to_address"].strip().lower(),
-        float(fila["value"]),
-    ))
-
-# Etiquetas
-etiquetas = {}
-for fila in csv.DictReader(io.StringIO(ETIQUETAS_CSV.strip())):
-    etiquetas[fila["address"].strip().lower()] = {
-        "nombre": fila["name"].strip(),
-        "tipo": fila["type"].strip(),
-    }
-
-# Construir el grafo compartido
-grafo = Grafo()
-for origen, destino, peso in aristas:
-    grafo._agregar_arista(origen, destino, peso)
-grafo.etiquetas = etiquetas
-
-print("Muestra cargada:")
-print("  nodos :", len(grafo.nodos))
-print("  aristas:", len(grafo.aristas))
-print("  etiquetas:", len(grafo.etiquetas))
-print("  resumen:", grafo.resumen())
-'''
-
-# Reemplazar placeholders de forma segura
-carga_datos = carga_datos.replace("__SAMPLE_B64__", b64)
-carga_datos = carga_datos.replace("__ETIQUETAS_CSV__", etiquetas_csv.strip("\n"))
 
 t1_md = """
 ## Tarea 1 — Bellman-Ford: camino de costo mínimo
@@ -421,30 +353,8 @@ for a, b, w in sorted(mst, key=lambda e: e[2])[:20]:
     print(f"  {grafo.nombre(a):<18} -- {grafo.nombre(b):<18} {w:,.2f}")
 '''
 
-drive_md = """
-## 3. Conectar con el dataset completo (Colab)
-
-Las tareas 1–4 y la Sección 1 ya funcionan con datos embebidos. El análisis
-completo necesita el Parquet de ~0,8 GB. Súbelo a:
-
-```
-Mi unidad/ED2/transferencias.parquet
-```
-
-La siguiente celda monta Google Drive. En local se salta sola.
-"""
-
-drive_code = '''
-# ============ MONTAR GOOGLE DRIVE (COLAB) ============
-try:
-    from google.colab import drive
-    drive.mount("/content/drive")
-except Exception as exc:
-    print("Drive no disponible (normal si estás en local):", exc)
-'''
-
 analisis_md = """
-## 3.1 Análisis del dataset completo (opcional)
+## 4. Análisis del dataset completo (opcional)
 
 Si el Parquet completo está en Drive o en local, esta sección calcula
 estadísticas sobre las **38.901.039 transferencias** con DuckDB, sin cargarlas
@@ -458,16 +368,7 @@ analisis_code = '''
 import os
 import time
 
-RUTA_PARQUET = "/content/transferencias.parquet"
-RUTA_DRIVE = "/content/drive/MyDrive/ED2/transferencias.parquet"
-RUTA_LOCAL = "data/procesado/transferencias.parquet"
-
-for _ruta in (RUTA_PARQUET, RUTA_DRIVE, RUTA_LOCAL):
-    if os.path.isfile(_ruta):
-        RUTA_PARQUET = _ruta
-        break
-
-if not os.path.isfile(RUTA_PARQUET):
+if not RUTA_PARQUET:
     print("Sección omitida: no encontré el Parquet completo.")
     print("Súbelo a Drive como MyDrive/ED2/transferencias.parquet.")
 else:
@@ -516,7 +417,7 @@ else:
 
 
 benchmark_md = """
-### 3.2 Benchmark de escalabilidad
+### 4.1 Benchmark de escalabilidad
 
 Extraemos subgrafos conectados reales del Parquet y medimos cuánto tarda cada
 algoritmo. Si uno se pasa de 15 segundos, se marca como *timeout*.
@@ -530,7 +431,7 @@ ejecutarse sobre las 38,9 M de aristas en Python puro.
 
 benchmark_code = '''
 # ============ BENCHMARK DE ESCALABILIDAD ============
-if os.path.isfile(RUTA_PARQUET):
+if RUTA_PARQUET and os.path.isfile(RUTA_PARQUET):
     import signal
     from collections import defaultdict, deque
 
@@ -643,6 +544,9 @@ celdas = [
     md(portada),
     md(capa_datos_md),
     code(leer_modulo("grafo.py")),
+    md(drive_md),
+    code(drive_code),
+    md(carga_md),
     code(carga_datos),
     md(seccion1_md),
     code(seccion1_code),
@@ -656,8 +560,6 @@ celdas = [
     code(t3_exp_code),
     md(t4_md),
     code(leer_modulo("arbol_expansion.py") + "\n\n" + t4_demo),
-    md(drive_md),
-    code(drive_code),
     md(analisis_md),
     code(analisis_code),
     md(benchmark_md),

@@ -283,16 +283,31 @@ Con el dataset completo:
 
 ### Entregable
 
-- **`notebooks/Proyecto_Final_Colab.ipynb`**: notebook único y autocontenido.
+- **`notebooks/Proyecto_Final_Colab.ipynb`**: notebook único.
 - Incluye Sección 1, las cuatro tareas, análisis completo y benchmark.
-- No necesita clonar el repositorio ni descargar el CSV de 8,3 GB.
+- Carga los datos desde `Mi unidad/ED2/` o desde `data/` en local.
+- No necesita clonar el repositorio.
 
-### Para el análisis completo en Colab
+### Para que funcione en Colab
 
-1. Subir `data/procesado/transferencias.parquet` a Google Drive como
-   `Mi unidad/ED2/transferencias.parquet`.
+Subir a `Mi unidad/ED2/`:
+
+```
+ED2/
+├── transferencias.parquet          (~807 MB, 38,9 M de filas)
+├── muestra/
+│   ├── transferencias_2k.csv
+│   └── etiquetas.csv
+└── real/
+    ├── softchaincoin.csv
+    └── exchange_labels.csv
+```
+
+1. Subir esos archivos a Drive.
 2. Abrir el notebook en Colab.
 3. Ejecutar la celda **“Montar Google Drive”**.
-4. Ejecutar las celdas de análisis y benchmark.
+4. Ejecutar las celdas en orden.
 
-Las tareas 1–4 y la Sección 1 funcionan sin el Parquet: usan datos embebidos.
+Las tareas 1–4 cargan la muestra de `muestra/`; si falta, la generan desde
+el Parquet. La Sección 1 necesita `real/softchaincoin.csv` y
+`real/exchange_labels.csv`; si no están, se omite.
