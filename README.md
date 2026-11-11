@@ -5,7 +5,7 @@ Proyecto final de **Estructura de Datos** — Universidad Industrial de Santande
 **Profesor:** Jonnathan Alfredo Ramos Chaux
 **Equipo:** Jhon Arciniegas, Pablo Álvarez y Emerson Ballesteros (líder)
 
-[![Abrir en Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/arcibyte/ethereum-exchange/blob/main/notebooks/Proyecto_Teoria_Grafos.ipynb)
+[![Abrir en Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/arcibyte/ethereum-exchange/blob/main/notebooks/Proyecto_Final_Colab.ipynb)
 
 ---
 
@@ -64,8 +64,9 @@ proyecto/
 │   ├── test_grafo.py
 │   └── test_datos.py
 ├── notebooks/
-│   ├── Proyecto_Teoria_Grafos.ipynb      <- entregable principal (Colab)
-│   └── Preparar_Dataset_Colab.ipynb      <- herramienta para procesar el CSV grande
+│   ├── Proyecto_Final_Colab.ipynb     <- ENTREGABLE único (autocontenido)
+│   ├── Proyecto_Teoria_Grafos.ipynb   <- versión modular para desarrollo
+│   └── Preparar_Dataset_Colab.ipynb   <- herramienta para procesar el CSV grande
 ├── scripts/
 │   ├── preparar_dataset.py <- 8,3 GB -> Parquet (~0,8 GB)
 │   └── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
@@ -87,22 +88,28 @@ tareas están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 
 ## Cómo ejecutar
 
-### Google Colab (recomendado)
+### Google Colab — entregable
 
-1. Abre `notebooks/Proyecto_Teoria_Grafos.ipynb` en Colab.
-2. Ejecuta la **celda de configuración**: clona el repositorio público y se
-   ubica en su raíz.
-3. Ejecuta la **celda de carga única** (Sección 1): construye una sola vez el
-   grafo que usan las cuatro tareas. Por defecto usa la muestra conectada de
-   ~2.000 aristas; también acepta el Parquet real.
-4. Ejecuta las demás celdas en orden.
+El entregable es **un solo notebook**:
 
-Las cuatro tareas reciben el mismo objeto `grafo`; ninguna vuelve a leer el
-archivo. El análisis del dataset completo se hace aparte con DuckDB en la
-Sección 2.
+```
+notebooks/Proyecto_Final_Colab.ipynb
+```
 
-No hay que subir archivos ni cambiar rutas: la celda de configuración lo hace
-todo.
+Es **autocontenido**: incluye la muestra de datos y el código de los cuatro
+algoritmos en sus propias celdas. No necesita clonar el repositorio ni
+instalar módulos del proyecto.
+
+1. Abre `notebooks/Proyecto_Final_Colab.ipynb` en Colab.
+2. Ejecuta las celdas en orden.
+3. La sección final usa el Parquet completo si está en Drive
+   (`Mi unidad/ED2/transferencias.parquet`); si no está, se omite.
+
+### Google Colab — versión modular (desarrollo)
+
+`notebooks/Proyecto_Teoria_Grafos.ipynb` es la versión para el equipo:
+clona el repositorio, importa los módulos de `src/` y permite trabajar tarea
+por tarea con tests. No es el archivo que se entrega.
 
 ### Local
 
@@ -114,10 +121,16 @@ cd ethereum-exchange
 python3 -m venv .venv && source .venv/bin/activate
 
 pip install matplotlib jupyter
-jupyter notebook notebooks/Proyecto_Teoria_Grafos.ipynb
+jupyter notebook notebooks/Proyecto_Final_Colab.ipynb
 ```
 
-La misma celda de configuración detecta la raíz del repositorio en local.
+Para desarrollo y tests:
+
+```bash
+pip install pytest
+python -m pytest tests/ -q
+jupyter notebook notebooks/Proyecto_Teoria_Grafos.ipynb
+```
 
 ### Pruebas
 
