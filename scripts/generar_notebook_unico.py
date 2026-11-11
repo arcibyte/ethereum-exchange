@@ -425,6 +425,38 @@ for direccion, info in sorted(
     id_comunidad = comunidades[direccion]
     tamano = len(grupos[id_comunidad])
     print(f"  {info['nombre']:<18} comunidad {id_comunidad:>3} ({tamano} nodos)")
+
+# Paso 6: gráficas que resumen la partición.
+import matplotlib.pyplot as plt
+
+# 6a. ¿Cómo se reparten los tamaños? Una comunidad grande y muchas pequeñas.
+tamanos = [len(nombres) for nombres in grupos.values()]
+
+plt.figure(figsize=(7, 4))
+plt.hist(tamanos, bins=20, color="seagreen", edgecolor="white")
+plt.xlabel("Nodos por comunidad")
+plt.ylabel("Cantidad de comunidades")
+plt.title(f"{len(grupos)} comunidades: una grande y muchas pequeñas")
+plt.tight_layout()
+plt.show()
+
+# 6b. Las 10 comunidades más grandes, con los exchanges que contienen.
+diez_mayores = sorted(grupos.items(), key=lambda par: -len(par[1]))[:10]
+
+etiquetas = []
+tamanos_diez = []
+for posicion, (_, nombres) in enumerate(diez_mayores, start=1):
+    exchanges = sorted(n for n in nombres if not n.startswith("0x"))
+    resumen = ", ".join(exchanges[:3]) if exchanges else "sin etiquetas"
+    etiquetas.append(f"{posicion}. {resumen}")
+    tamanos_diez.append(len(nombres))
+
+plt.figure(figsize=(9, 5))
+plt.barh(etiquetas[::-1], tamanos_diez[::-1], color="steelblue")
+plt.xlabel("Nodos")
+plt.title("Comunidades más grandes y sus exchanges")
+plt.tight_layout()
+plt.show()
 '''
 
 t3_exp_md = """
