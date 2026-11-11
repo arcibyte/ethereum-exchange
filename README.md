@@ -72,6 +72,7 @@ proyecto/
 ├── docs/
 │   ├── ARQUITECTURA.md     <- contrato y reglas de división
 │   ├── DATASET.md          <- cómo procesar el dataset grande
+│   ├── PROCESAMIENTO_DATOS.md <- qué se hizo con los datos y por qué
 │   ├── guias/              <- guías de lectura por tarea
 │   ├── emerson/            <- reporte y guion de la T3
 │   ├── guion_video.md      <- plan del video (9 min)
@@ -136,6 +137,10 @@ El dataset completo (~38,9 millones de transferencias, ~8 GB) se comparte por
 Drive y **no** se sube al repositorio por su tamaño. Para trabajar con él sin
 quedarnos sin memoria, lo "precargamos" en **Parquet comprimido** (~0,8 GB) y
 generamos una muestra conectada para los algoritmos:
+
+> La explicación completa del pipeline —qué se hizo con los datos, por qué,
+> cómo verificarlo y dónde va cada archivo— está en
+> [`docs/PROCESAMIENTO_DATOS.md`](docs/PROCESAMIENTO_DATOS.md).
 
 ```bash
 pip install -r requirements-datos.txt
