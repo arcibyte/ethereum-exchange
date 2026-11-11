@@ -407,6 +407,9 @@ algoritmo. Si uno se pasa de 15 segundos, se marca como *timeout*.
 
 Esto muestra, con datos reales, por qué Bellman-Ford y Louvain no pueden
 ejecutarse sobre las 38,9 M de aristas en Python puro.
+
+> Requiere haber ejecutado antes las celdas de las tareas 1–4: allí se definen
+> las funciones de los cuatro algoritmos.
 """
 
 benchmark_code = '''
