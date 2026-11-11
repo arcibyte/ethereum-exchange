@@ -85,9 +85,7 @@ proyecto/
 │   ├── DATASET.md          <- cómo procesar el dataset grande
 │   ├── PROCESAMIENTO_DATOS.md <- qué se hizo con los datos y por qué
 │   ├── guias/              <- guías de lectura por tarea
-│   ├── emerson/            <- reporte y guion de la T3
-│   ├── guion_video.md      <- plan del video (9 min)
-│   └── poster.md           <- contenido del póster
+│   ├── emerson/            <- reporte de la T3
 ├── requirements.txt
 ├── requirements-datos.txt  <- duckdb + pyarrow (solo preprocesamiento)
 └── README.md
