@@ -1,6 +1,7 @@
 # Muestra conectada para los algoritmos
 
-Esta carpeta contiene la muestra que usan las Tareas 1–4:
+Esta carpeta contiene una muestra de referencia. El notebook puede generarla
+desde el Parquet; estos archivos sirven para pruebas y para revisar el formato:
 
 | Archivo | Descripción |
 |---|---|

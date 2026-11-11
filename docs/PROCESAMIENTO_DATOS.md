@@ -1,3 +1,9 @@
+> **Nota para el entregable:** el notebook usa un solo archivo,
+> `transferencias.parquet`. Las secciones sobre muestra, `real/` y
+> SoftChainCoin describen el pipeline de desarrollo; el notebook final las
+> reemplaza generando la muestra desde el Parquet y calculando estadísticas
+> completas con DuckDB.
+
 # Procesamiento del dataset — explicación para el profesor y el equipo
 
 Este documento explica **qué se hizo con el dataset de Ethereum**, por qué se
@@ -290,24 +296,24 @@ Con el dataset completo:
 
 ### Para que funcione en Colab
 
-Subir a `Mi unidad/ED2/`:
+El profesor solo sube un archivo:
 
 ```
-ED2/
-├── transferencias.parquet          (~807 MB, 38,9 M de filas)
-├── muestra/
-│   ├── transferencias_2k.csv
-│   └── etiquetas.csv
-└── real/
-    ├── softchaincoin.csv
-    └── exchange_labels.csv
+transferencias.parquet   (~807 MB, 38.901.039 filas)
 ```
 
-1. Subir esos archivos a Drive.
+Puede estar en:
+
+```
+/content/transferencias.parquet
+Mi unidad/ED2/transferencias.parquet
+data/procesado/transferencias.parquet
+```
+
+1. Subir el Parquet.
 2. Abrir el notebook en Colab.
-3. Ejecutar la celda **“Montar Google Drive”**.
+3. Ejecutar la celda **“Montar Google Drive”** (si está en Drive).
 4. Ejecutar las celdas en orden.
 
-Las tareas 1–4 cargan la muestra de `muestra/`; si falta, la generan desde
-el Parquet. La Sección 1 necesita `real/softchaincoin.csv` y
-`real/exchange_labels.csv`; si no están, se omite.
+El notebook genera la muestra de USDC desde el Parquet, ejecuta las cuatro
+tareas y calcula las estadísticas del dataset completo con DuckDB.

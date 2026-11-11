@@ -107,28 +107,27 @@ notebooks/Proyecto_Final_Colab.ipynb
 ```
 
 Incluye el código de los cuatro algoritmos en sus propias celdas y **carga
-los datos desde Google Drive o desde `data/` en local**. El profesor debe
-subir el paquete de datos a `Mi unidad/ED2/`:
+los datos desde un solo archivo**:
 
 ```
-ED2/
-├── transferencias.parquet
-├── muestra/
-│   ├── transferencias_2k.csv
-│   └── etiquetas.csv
-└── real/
-    ├── softchaincoin.csv
-    └── exchange_labels.csv
+transferencias.parquet   (~807 MB)
 ```
 
-1. Sube esos archivos a `Mi unidad/ED2/`.
+El profesor puede dejarlo en:
+
+```
+/content/transferencias.parquet
+Mi unidad/ED2/transferencias.parquet
+data/procesado/transferencias.parquet
+```
+
+1. Sube `transferencias.parquet`.
 2. Abre `notebooks/Proyecto_Final_Colab.ipynb` en Colab.
-3. Ejecuta la celda **“Montar Google Drive”**.
+3. Ejecuta la celda **“Montar Google Drive”** (si lo subiste a Drive).
 4. Ejecuta las celdas en orden.
 
-Si falta la muestra, el notebook la genera desde el Parquet. Si falta el
-Parquet, las tareas no pueden correr. La Sección 1 necesita la carpeta
-`real/`.
+El notebook genera una muestra de USDC desde el Parquet, ejecuta las cuatro
+tareas y calcula las estadísticas del dataset completo con DuckDB.
 
 ### Google Colab — versión modular (desarrollo)
 
@@ -170,31 +169,32 @@ python -m pytest tests/test_comunidades.py -v     # solo T3 (Emerson)
 python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 ```
 
-## Sección 1: preparar los datos reales
+## Scripts de desarrollo (opcional)
 
-La sección 1 del notebook corre sin descargar nada: usa las etiquetas reales y
-la red real de SoftChainCoin que vienen en `data/real/`. Para describir los 28
-tokens del dataset y analizar uno de ellos, se generan **una sola vez** dos
-archivos pequeños a partir del CSV completo y se suben al repositorio:
+El entregable **no necesita estos scripts**: solo usa `transferencias.parquet`.
+Se mantienen para regenerar el dataset o una muestra de referencia.
 
 ```bash
-# 1) Resumen de los 28 tokens (una pasada, ~4 min y 2-3 GB de RAM; --sin-distintos usa poca RAM)
-python scripts/preparar_seccion1.py resumen --entrada /ruta/token_transfers_full.csv
+# CSV de 8,3 GB -> Parquet de ~0,8 GB
+python scripts/preparar_dataset.py convertir \
+    --entrada /ruta/token_transfers_full.csv \
+    --salida data/procesado/transferencias.parquet \
+    --memoria 2GB --temporal data/procesado/tmp
 
-# 2) Aristas limpias del token elegido (entrada de las tareas 1-4)
-python scripts/preparar_seccion1.py exportar --entrada /ruta/token_transfers_full.csv \
-    --token 0x... --resumen data/resumen/tokens.csv --salida data/tokens/<nombre>.csv
+# Parquet -> muestra de USDC (referencia; el notebook también la genera)
+python scripts/generar_muestra.py \
+    --entrada data/procesado/transferencias.parquet \
+    --salida data/muestra/transferencias_2k.csv \
+    --objetivo 2000 --filas 65000 --semilla 42 \
+    --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6
 ```
-
-Solo usa la librería estándar. Las reglas de limpieza son las mismas de los
-autores del dataset; están explicadas en la sección 1.2 del notebook.
 
 ## Sobre el dataset
 
-El dataset completo (~38,9 millones de transferencias, ~8 GB) se comparte por
-Drive y **no** se sube al repositorio por su tamaño. Para trabajar con él sin
-quedarnos sin memoria, lo "precargamos" en **Parquet comprimido** (~0,8 GB) y
-generamos una muestra conectada para los algoritmos:
+El entregable usa **un solo archivo**: `transferencias.parquet` (~0,8 GB,
+38.901.039 filas). El profesor lo sube a Colab o a Drive. El notebook genera
+la muestra de USDC que necesitan los algoritmos. El CSV original de 8,3 GB
+**no** se sube al repositorio.
 
 > La explicación completa del pipeline —qué se hizo con los datos, por qué,
 > cómo verificarlo y dónde va cada archivo— está en
@@ -219,21 +219,17 @@ python scripts/generar_muestra.py \
     --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6
 ```
 
-- `data/procesado/transferencias.parquet` (~0,8 GB): dataset completo, va a
-  **Drive**.
-- `data/muestra/transferencias_2k.csv` (~195 KB): muestra de USDC para los
-  algoritmos, va a **GitHub**.
-- `data/sample/`: 12 nodos para tests, va a **GitHub**.
+- `transferencias.parquet` (~0,8 GB): **único archivo** que se sube a Drive/Colab.
+- `data/muestra/transferencias_2k.csv` (~195 KB): muestra de referencia;
+  el notebook también puede generarla desde el Parquet.
+- `data/sample/`: 12 nodos para tests.
 
-El detalle (por qué baja de tamaño, qué tamaño usar para cada algoritmo y cómo
-filtrar por token o fecha) está en [`docs/DATASET.md`](docs/DATASET.md).
+El detalle del pipeline está en [`docs/PROCESAMIENTO_DATOS.md`](docs/PROCESAMIENTO_DATOS.md)
+y [`docs/DATASET.md`](docs/DATASET.md).
 
-El notebook incluye además una sección de **análisis extenso** con su propia
-celda de configuración: estadísticas del dataset completo (38,9 M) y un
-**benchmark de escalabilidad** que mide, sobre subgrafos reales de tamaño
-creciente, por qué Bellman-Ford y Louvain se ejecutan sobre una muestra y
-Kruskal/PageRank aguantan más. Todo sale del dataset real; no se inventan
-grafos.
+El notebook incluye las **estadísticas del dataset completo (38,9 M)** con
+DuckDB. Los cuatro algoritmos se ejecutan sobre la muestra de USDC porque su
+complejidad no permite ejecutarlos sobre 38,9 M en Colab.
 
 Para el desarrollo diario y los tests usamos una **muestra mínima** (12
 direcciones y 20 transferencias) que corre al instante.
