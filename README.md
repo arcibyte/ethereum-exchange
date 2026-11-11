@@ -52,7 +52,6 @@ proyecto/
 │   ├── real/               <- datos REALES pequeños (ver data/real/FUENTE.md)
 │   │   ├── exchange_labels.csv <- 296 exchanges (247 cex, 49 dex)
 │   │   └── softchaincoin.csv   <- red real de SoftChainCoin
-│   ├── labels/             <- etiquetas completas de exchanges
 │   ├── resumen/            <- resumen de los 28 tokens (lo genera la sección 1)
 │   └── tokens/             <- aristas limpias por token: entrada de T1-T4
 ├── src/                    <- nuestros algoritmos (Python puro)
@@ -199,7 +198,7 @@ python scripts/preparar_dataset.py convertir \
 python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
     --salida data/muestra/transferencias_2k.csv \
-    --etiquetas data/labels/exchange_labels.csv \
+    --etiquetas data/real/exchange_labels.csv \
     --salida-etiquetas data/muestra/etiquetas.csv \
     --objetivo 2000 --filas 65000 --semilla 42 \
     --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6

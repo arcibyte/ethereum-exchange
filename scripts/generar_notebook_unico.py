@@ -305,8 +305,30 @@ for a, b, w in sorted(mst, key=lambda e: e[2])[:20]:
     print(f"  {grafo.nombre(a):<18} -- {grafo.nombre(b):<18} {w:,.2f}")
 '''
 
+drive_md = """
+## 3. Conectar con el dataset completo (Colab)
+
+Las tareas 1–4 y la Sección 1 ya funcionan con datos embebidos. El análisis
+completo necesita el Parquet de ~0,8 GB. Súbelo a:
+
+```
+Mi unidad/ED2/transferencias.parquet
+```
+
+La siguiente celda monta Google Drive. En local se salta sola.
+"""
+
+drive_code = '''
+# ============ MONTAR GOOGLE DRIVE (COLAB) ============
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+except Exception as exc:
+    print("Drive no disponible (normal si estás en local):", exc)
+'''
+
 analisis_md = """
-## 3. Análisis del dataset completo (opcional)
+## 3.1 Análisis del dataset completo (opcional)
 
 Si el Parquet completo está en Drive o en local, esta sección calcula
 estadísticas sobre las **38.901.039 transferencias** con DuckDB, sin cargarlas
@@ -323,10 +345,6 @@ import time
 RUTA_PARQUET = "/content/transferencias.parquet"
 RUTA_DRIVE = "/content/drive/MyDrive/ED2/transferencias.parquet"
 RUTA_LOCAL = "data/procesado/transferencias.parquet"
-
-# En Colab, descomenta si el Parquet está en Drive:
-# from google.colab import drive
-# drive.mount("/content/drive")
 
 for _ruta in (RUTA_PARQUET, RUTA_DRIVE, RUTA_LOCAL):
     if os.path.isfile(_ruta):
@@ -382,7 +400,7 @@ else:
 
 
 benchmark_md = """
-### 3.1 Benchmark de escalabilidad
+### 3.2 Benchmark de escalabilidad
 
 Extraemos subgrafos conectados reales del Parquet y medimos cuánto tarda cada
 algoritmo. Si uno se pasa de 15 segundos, se marca como *timeout*.
@@ -517,6 +535,8 @@ celdas = [
     code(leer_modulo("comunidades.py") + "\n\n" + t3_demo),
     md(t4_md),
     code(leer_modulo("arbol_expansion.py") + "\n\n" + t4_demo),
+    md(drive_md),
+    code(drive_code),
     md(analisis_md),
     code(analisis_code),
     md(benchmark_md),

@@ -81,7 +81,7 @@ guardando también las etiquetas de los exchanges que aparecen:
 python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
     --salida data/muestra/transferencias_2k.csv \
-    --etiquetas data/labels/exchange_labels.csv \
+    --etiquetas data/real/exchange_labels.csv \
     --salida-etiquetas data/muestra/etiquetas.csv \
     --objetivo 2000 --filas 65000 --semilla 42 \
     --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6

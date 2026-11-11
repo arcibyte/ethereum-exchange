@@ -184,7 +184,7 @@ En una máquina con más RAM se puede subir el límite; en Colab también.
 python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
     --salida data/muestra/transferencias_2k.csv \
-    --etiquetas data/labels/exchange_labels.csv \
+    --etiquetas data/real/exchange_labels.csv \
     --salida-etiquetas data/muestra/etiquetas.csv \
     --objetivo 2000 \
     --filas 65000 \
