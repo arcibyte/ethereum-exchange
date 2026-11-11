@@ -182,6 +182,9 @@ t2_md = """
 
 PageRank se calcula con iteración de potencias y factor de amortiguación
 `d = 0.85`.
+
+La gráfica del top 5 y las validaciones de esta sección fueron aportadas por
+Jhon Arciniegas (T2).
 """
 
 t2_demo = '''
@@ -196,18 +199,26 @@ for _, score, nombre in top_n(cent_grado, n=10, etiquetas=grafo.etiquetas):
     print(f"  {nombre:<18} {score:.4f}")
 
 print("\\nTop 10 por PageRank:")
-top = top_n(pr, n=10, etiquetas=grafo.etiquetas)
-for _, score, nombre in top:
+for _, score, nombre in top_n(pr, n=10, etiquetas=grafo.etiquetas):
     print(f"  {nombre:<18} {score:.4f}")
 
-nombres = [nombre[:18] for _, _, nombre in top]
-valores = [score for _, score, _ in top]
-plt.figure(figsize=(8, 4))
-plt.barh(nombres[::-1], valores[::-1], color="mediumpurple")
+# Gráfica y validaciones aportadas por Jhon Arciniegas (T2).
+top_pr = top_n(pr, n=5, etiquetas=grafo.etiquetas)
+nombres_pr = [nombre for _, _, nombre in top_pr]
+scores_pr = [score for _, score, _ in top_pr]
+
+plt.figure(figsize=(7, 4))
+plt.barh(nombres_pr[::-1], scores_pr[::-1], color="steelblue")
 plt.xlabel("PageRank")
-plt.title("Top 10 nodos por PageRank")
+plt.title("Top 5 direcciones por PageRank")
 plt.tight_layout()
 plt.show()
+
+# Validaciones de centralidad (mismas que tests/test_centralidad.py).
+assert centralidad_grado({"A": []}, {"A"})["A"] == 0.0
+assert pagerank({}, set()) == {}
+assert top_n({"A": 0.5, "B": 0.3}, n=2)[0][0] == "A"
+print("Validaciones de centralidad: OK")
 '''
 
 t3_md = """
