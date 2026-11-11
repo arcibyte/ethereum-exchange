@@ -35,8 +35,18 @@ def _fuente(ruta: str) -> str:
     return f"read_csv_auto('{texto}', header=true)"
 
 
-def muestrear(entrada: str, filas: int, semilla: int) -> list[tuple[str, str, float]]:
-    """Toma una muestra aleatoria reproducible de transferencias."""
+def muestrear(
+    entrada: str,
+    filas: int,
+    semilla: int,
+    token: str | None = None,
+    decimales: int = 0,
+) -> list[tuple[str, str, float]]:
+    """Toma una muestra aleatoria reproducible de transferencias.
+
+    Si se indica `token`, filtra por ese contrato. `decimales` normaliza el
+    valor (por ejemplo, USDC tiene 6 decimales).
+    """
     try:
         import duckdb
     except ImportError as exc:  # pragma: no cover
@@ -47,19 +57,24 @@ def muestrear(entrada: str, filas: int, semilla: int) -> list[tuple[str, str, fl
 
     con = duckdb.connect()
     try:
+        where = ""
+        if token:
+            where = f"WHERE CAST(token_address AS VARCHAR) = '{token}'"
         consulta = (
             f"SELECT from_address, to_address, value FROM {_fuente(entrada)} "
+            f"{where} "
             f"USING SAMPLE reservoir({int(filas)} ROWS) REPEATABLE ({int(semilla)})"
         )
         filas_leidas = con.execute(consulta).fetchall()
     finally:
         con.close()
 
+    factor = 10.0 ** int(decimales)
     aristas: list[tuple[str, str, float]] = []
     for origen, destino, valor in filas_leidas:
         origen = str(origen).strip().lower()
         destino = str(destino).strip().lower()
-        valor = float(valor)
+        valor = float(valor) / factor
         if not origen or not destino or origen == destino:
             continue
         if origen == "0x0000000000000000000000000000000000000000":
@@ -103,7 +118,7 @@ def componente_mayor(aristas: list[tuple[str, str, float]]) -> list[tuple[str, s
 def guardar(aristas: list[tuple[str, str, float]], salida: Path) -> None:
     salida.parent.mkdir(parents=True, exist_ok=True)
     with salida.open("w", newline="", encoding="utf-8") as fh:
-        escritor = csv.writer(fh)
+        escritor = csv.writer(fh, lineterminator="\n")
         escritor.writerow(["from_address", "to_address", "value"])
         for origen, destino, valor in aristas:
             escritor.writerow([origen, destino, valor])
@@ -138,7 +153,7 @@ def guardar_etiquetas(
 
     salida.parent.mkdir(parents=True, exist_ok=True)
     with salida.open("w", newline="", encoding="utf-8") as fh:
-        escritor = csv.writer(fh)
+        escritor = csv.writer(fh, lineterminator="\n")
         escritor.writerow(["address", "name", "type"])
         escritor.writerows(sorted(filas))
     return len(filas)
@@ -152,13 +167,32 @@ def main() -> None:
     parser.add_argument("--salida-etiquetas", default=None, help="CSV de etiquetas filtradas")
     parser.add_argument("--objetivo", type=int, default=2_000,
                         help="Aristas objetivo de la muestra (aproximado)")
+    parser.add_argument("--filas", type=int, default=None,
+                        help="filas a muestrear antes de la componente (por defecto 3*objetivo)")
+    parser.add_argument("--token", default=None,
+                        help="contrato del token a analizar (ej. USDC)")
+    parser.add_argument("--decimales", type=int, default=0,
+                        help="decimales del token para normalizar value (USDC=6, DAI=18)")
     parser.add_argument("--semilla", type=int, default=42)
     args = parser.parse_args()
 
     # Se muestrean más filas de las necesarias porque al quedarnos con la
     # componente conexa más grande se descartan nodos aislados.
-    filas = max(args.objetivo * 2, 1_000)
-    aristas = componente_mayor(muestrear(args.entrada, filas, args.semilla))
+    filas = args.filas if args.filas else max(args.objetivo * 3, 1_000)
+    aristas = componente_mayor(
+        muestrear(args.entrada, filas, args.semilla, args.token, args.decimales)
+    )
+
+    # Si la componente quedó pequeña, se amplía la muestra (hasta un límite).
+    while (
+        not args.filas
+        and len(aristas) < args.objetivo
+        and filas < args.objetivo * 20
+    ):
+        filas *= 2
+        aristas = componente_mayor(
+            muestrear(args.entrada, filas, args.semilla, args.token, args.decimales)
+        )
 
     if not aristas:
         raise SystemExit("La muestra quedó vacía. Revisa el archivo de entrada.")

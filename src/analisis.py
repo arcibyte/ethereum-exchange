@@ -40,8 +40,14 @@ from src.comunidades import louvain, simetrizar
 # Utilidades de DuckDB
 # ----------------------------------------------------------------------
 
-def abrir():
-    """Abre una conexión DuckDB (en memoria)."""
+def abrir(memoria: str | None = None, temporal: str | None = None, threads: int | None = None):
+    """Abre una conexión DuckDB con ajustes para máquinas de poca RAM.
+
+    Parámetros:
+        memoria: límite de memoria, por ejemplo "2GB".
+        temporal: directorio en disco para derramar datos.
+        threads: número de hilos (menos hilos usan menos memoria).
+    """
     try:
         import duckdb
     except ImportError as exc:  # pragma: no cover
@@ -49,7 +55,21 @@ def abrir():
             "Falta duckdb. Instálalo con:\n"
             "    pip install -r requirements-datos.txt"
         ) from exc
-    return duckdb.connect()
+
+    con = duckdb.connect()
+    # No conservar el orden de inserción reduce mucho el uso de memoria.
+    con.execute("SET preserve_insertion_order = false")
+    if memoria:
+        con.execute(f"SET memory_limit = {_texto(memoria)}")
+    if threads:
+        con.execute(f"SET threads = {int(threads)}")
+
+    # DuckDB necesita un directorio temporal para poder derramar a disco.
+    import tempfile
+    ruta_temporal = temporal or os.path.join(tempfile.gettempdir(), "duckdb_tmp")
+    os.makedirs(ruta_temporal, exist_ok=True)
+    con.execute(f"SET temp_directory = {_texto(ruta_temporal)}")
+    return con
 
 
 def _texto(valor: str) -> str:
@@ -96,7 +116,8 @@ def estadisticas(
         - resumen: totales y promedios.
         - valores: histograma de log10(valor).
         - grados: distribución de grados (entrada + salida).
-        - top_volumen: direcciones que más volumen mueven.
+        - top_volumen: direcciones que más volumen mueven (crudo, por token).
+        - top_actividad: direcciones con más transferencias (comparable).
         - top_grado: direcciones con más conexiones.
         - tokens: conteo por token (si existe la columna).
         - actividad: transferencias por día (si existe la columna de tiempo).
@@ -106,11 +127,19 @@ def estadisticas(
     # (por ejemplo `WHERE value > 0`) sin repetir la cláusula WHERE.
     src = f"(SELECT * FROM {_fuente(ruta, filas)} {_where(columnas, token)})"
 
-    total, origenes, destinos, volumen, promedio, maximo = con.execute(
-        f"SELECT count(*), count(DISTINCT from_address), count(DISTINCT to_address), "
-        f"coalesce(sum(value), 0), coalesce(avg(value), 0), coalesce(max(value), 0) "
+    total, volumen, promedio, maximo = con.execute(
+        f"SELECT count(*), coalesce(sum(value), 0), "
+        f"coalesce(avg(value), 0), coalesce(max(value), 0) "
         f"FROM {src}"
     ).fetchone()
+    # Los distinct se hacen por separado para no mantener dos tablas hash
+    # grandes al mismo tiempo en máquinas con poca RAM.
+    origenes = con.execute(
+        f"SELECT count(DISTINCT from_address) FROM {src}"
+    ).fetchone()[0]
+    destinos = con.execute(
+        f"SELECT count(DISTINCT to_address) FROM {src}"
+    ).fetchone()[0]
 
     valores = con.execute(
         f"SELECT floor(log10(value)) AS bin, count(*) AS n "
@@ -129,6 +158,13 @@ def estadisticas(
     top_volumen = con.execute(
         f"SELECT from_address, sum(value) AS total FROM {src} "
         f"GROUP BY from_address ORDER BY total DESC LIMIT 20"
+    ).fetchall()
+
+    # Ranking por número de transferencias: es comparable entre tokens,
+    # mientras que sumar `value` de tokens distintos mezcla unidades.
+    top_actividad = con.execute(
+        f"SELECT from_address, count(*) AS n FROM {src} "
+        f"GROUP BY from_address ORDER BY n DESC LIMIT 20"
     ).fetchall()
 
     top_grado = con.execute(
@@ -179,6 +215,7 @@ def estadisticas(
         "valores": [(float(b), int(n)) for b, n in valores],
         "grados": [(int(g), int(n)) for g, n in grados],
         "top_volumen": [(a, float(v)) for a, v in top_volumen],
+        "top_actividad": [(a, int(n)) for a, n in top_actividad],
         "top_grado": [(a, int(g)) for a, g in top_grado],
         "tokens": [(t, int(n)) for t, n in tokens] if tokens else None,
         "actividad": [(d, int(n)) for d, n in actividad] if actividad else None,

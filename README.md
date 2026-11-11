@@ -46,7 +46,7 @@ proyecto/
 │   ├── sample/             <- muestra mínima para tests (12 nodos)
 │   │   ├── transferencias.csv
 │   │   └── etiquetas.csv
-│   └── muestra/            <- muestra conectada real (~2.000 aristas, ~200 KB)
+│   └── muestra/            <- muestra conectada real de USDC (~2.000 aristas)
 │       ├── transferencias_2k.csv
 │       └── etiquetas.csv
 ├── src/                    <- nuestros algoritmos (Python puro)
@@ -67,7 +67,7 @@ proyecto/
 │   ├── Proyecto_Teoria_Grafos.ipynb      <- entregable principal (Colab)
 │   └── Preparar_Dataset_Colab.ipynb      <- herramienta para procesar el CSV grande
 ├── scripts/
-│   ├── preparar_dataset.py <- 8 GB -> Parquet (~2.3 GB)
+│   ├── preparar_dataset.py <- 8,3 GB -> Parquet (~0,8 GB)
 │   └── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
 ├── docs/
 │   ├── ARQUITECTURA.md     <- contrato y reglas de división
@@ -134,29 +134,31 @@ python -m pytest tests/test_arbol_expansion.py -v # solo T4 (grupo)
 
 El dataset completo (~38,9 millones de transferencias, ~8 GB) se comparte por
 Drive y **no** se sube al repositorio por su tamaño. Para trabajar con él sin
-quedarnos sin memoria, lo "precargamos" en **Parquet comprimido** (~2,3 GB) y
+quedarnos sin memoria, lo "precargamos" en **Parquet comprimido** (~0,8 GB) y
 generamos una muestra conectada para los algoritmos:
 
 ```bash
 pip install -r requirements-datos.txt
 
-# 1) CSV de 8 GB -> Parquet de ~2.3 GB
+# 1) CSV de 8,3 GB -> Parquet de ~0,8 GB
 python scripts/preparar_dataset.py convertir \
     --entrada /ruta/transferencias.csv \
-    --salida data/procesado/transferencias.parquet
+    --salida data/procesado/transferencias.parquet \
+    --memoria 2GB --temporal data/procesado/tmp
 
-# 2) Parquet -> muestra conectada de ~2.000 aristas + etiquetas
+# 2) Parquet -> muestra conectada de USDC (~2.000 aristas) + etiquetas
 python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
     --salida data/muestra/transferencias_2k.csv \
-    --etiquetas /ruta/exchange_labels.csv \
+    --etiquetas data/labels/exchange_labels.csv \
     --salida-etiquetas data/muestra/etiquetas.csv \
-    --objetivo 2000
+    --objetivo 2000 --filas 65000 --semilla 42 \
+    --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6
 ```
 
-- `data/procesado/transferencias.parquet` (~2,3 GB): dataset completo, va a
+- `data/procesado/transferencias.parquet` (~0,8 GB): dataset completo, va a
   **Drive**.
-- `data/muestra/transferencias_2k.csv` (~200 KB): muestra para los
+- `data/muestra/transferencias_2k.csv` (~195 KB): muestra de USDC para los
   algoritmos, va a **GitHub**.
 - `data/sample/`: 12 nodos para tests, va a **GitHub**.
 

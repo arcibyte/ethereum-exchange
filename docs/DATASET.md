@@ -1,22 +1,24 @@
-# Dataset: cómo pasar de 8 GB a una muestra usable
+# Dataset: cómo pasar de 8,3 GB a una muestra usable
 
-El dataset completo de transferencias pesa **~8 GB** y no cabe cómodamente en
-memoria (Colab da ~12 GB y esta máquina tiene 11 GB). Además, los algoritmos
+El dataset completo de transferencias pesa **~8,3 GB** y no cabe cómodamente en
+memoria (Colab da ~12 GB y esta máquina tiene ~7,4 GB). Además, los algoritmos
 del proyecto son de Python puro y no están pensados para millones de aristas.
 
 La solución tiene dos partes:
 
-1. **Precargar** el CSV en **Parquet comprimido** (~2.3 GB).
+1. **Precargar** el CSV en **Parquet comprimido** (~0,8 GB).
 2. **Muestrear** un subgrafo manejable para ejecutar los algoritmos.
 
 El preprocesamiento usa `duckdb` (solo para datos). **Los algoritmos siguen
 siendo Python puro** y no dependen de ninguna librería externa.
 
-## ¿Por qué baja de 8 GB a 2.3 GB?
+## ¿Por qué baja de 8,3 GB a 0,8 GB?
 
 El CSV guarda todo como texto. Parquet guarda columnas en binario y las
 comprime con ZSTD. Las direcciones hexadecimales se repiten mucho, así que
-comprimen muy bien. Una reducción de 3 a 4 veces es lo normal: **8 GB → ~2.3 GB**.
+comprimen muy bien. En este dataset la reducción fue de ~10 veces
+(**8,3 GB → ~0,8 GB**), en parte porque no se guardan `transaction_hash` ni
+`log_index`, que no se usan en los algoritmos.
 
 ## Instalar las dependencias de datos
 
@@ -72,14 +74,17 @@ guardando también las etiquetas de los exchanges que aparecen:
 python scripts/generar_muestra.py \
     --entrada data/procesado/transferencias.parquet \
     --salida data/muestra/transferencias_2k.csv \
-    --etiquetas data/raw/exchange_labels.csv \
+    --etiquetas data/labels/exchange_labels.csv \
     --salida-etiquetas data/muestra/etiquetas.csv \
-    --objetivo 2000 --semilla 42
+    --objetivo 2000 --filas 65000 --semilla 42 \
+    --token 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --decimales 6
 ```
 
+- Filtra **USDC** para no mezclar unidades de tokens distintos.
 - Toma una muestra aleatoria con semilla fija.
 - Se queda con la **componente conexa más grande**.
-- Escribe un CSV de ~200 KB y un CSV de etiquetas.
+- Normaliza `value` a USDC (6 decimales).
+- Escribe un CSV de ~195 KB y un CSV de etiquetas.
 - Es la muestra que usa el notebook por defecto (`FUENTE = "muestra"`).
 
 ## 3. Ver estadísticas

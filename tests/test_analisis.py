@@ -53,6 +53,7 @@ def test_estadisticas_resumen(parquet):
     assert datos["resumen"]["destinos"] == 5   # B, C, A, E, D
     assert datos["actividad"] is not None
     assert datos["tokens"] == [("0xtoken", 5)]
+    assert datos["top_actividad"][0] == ("A", 2)
 
 
 def test_extraer_base(parquet):

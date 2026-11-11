@@ -152,9 +152,9 @@ y sus usuarios). El puente entre ambos es una transferencia débil USDC →
 Binance, que el algoritmo correctamente no usa para fusionar los grupos.
 
 Sobre la **muestra conectada real** (`data/muestra/transferencias_2k.csv`,
-~2.258 aristas y ~1.554 nodos), Louvain encuentra alrededor de **84
-comunidades con $Q \approx 0.67$**. Al probar 5 semillas, $Q$ se mantiene
-entre 0.667 y 0.674, lo que muestra que el resultado es estable.
+~2.063 aristas y ~1.371 nodos de USDC), Louvain encuentra entre **69 y 71
+comunidades con $Q \approx 0.73$**. Al probar 5 semillas, $Q$ se mantiene
+entre 0.730 y 0.736, lo que muestra que el resultado es estable.
 
 ## 8. Complejidad
 
