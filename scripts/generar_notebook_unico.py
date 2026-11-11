@@ -708,7 +708,7 @@ celdas = [
     md(t2_md),
     code(leer_modulo("centralidad.py") + "\n\n" + t2_demo),
     md(t3_md),
-    code(sin_definiciones(leer_modulo("comunidades.py"), {"louvain_desde_aristas"}) + "\n\n" + t3_demo),
+    code(leer_modulo("comunidades.py") + "\n\n" + t3_demo),
     md(t3_exp_md),
     code(t3_exp_code),
     md(t4_md),
