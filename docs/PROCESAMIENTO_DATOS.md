@@ -276,3 +276,23 @@ Con el dataset completo:
 > transferencias completas, y generamos una muestra conectada de USDC de 2.063
 > aristas para que los cuatro algoritmos en Python puro corran en Colab. El
 > análisis descriptivo y el benchmark usan el dataset completo con DuckDB.
+
+---
+
+## 9. Entregable y qué falta
+
+### Entregable
+
+- **`notebooks/Proyecto_Final_Colab.ipynb`**: notebook único y autocontenido.
+- Incluye Sección 1, las cuatro tareas, análisis completo y benchmark.
+- No necesita clonar el repositorio ni descargar el CSV de 8,3 GB.
+
+### Para el análisis completo en Colab
+
+1. Subir `data/procesado/transferencias.parquet` a Google Drive como
+   `Mi unidad/ED2/transferencias.parquet`.
+2. Abrir el notebook en Colab.
+3. Ejecutar la celda **“Montar Google Drive”**.
+4. Ejecutar las celdas de análisis y benchmark.
+
+Las tareas 1–4 y la Sección 1 funcionan sin el Parquet: usan datos embebidos.
