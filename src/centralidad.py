@@ -1,51 +1,22 @@
-"""
-centralidad.py
-==============
-Tarea 2 — Centralidad e influencia.
-
-Queremos responder: ¿qué nodos son los más importantes en la red?
-
-Calculamos dos medidas:
-
-    1. Centralidad de grado: cuántas conexiones tiene un nodo.
-       C(v) = grado(v) / (|V| - 1)
-
-    2. PageRank: la importancia de un nodo depende de la importancia de
-       quienes le apuntan (es la misma idea que usa el buscador de Google).
-       PR(v) = (1-d)/N + d * suma_{u -> v} ( PR(u) / grado_salida(u) )
-
-       donde d es el factor de amortiguación (0.85 por defecto).
-"""
-
 from typing import Dict, List, Optional, Set, Tuple
 
 
-def centralidad_grado(
-    adj: Dict[str, List[Tuple[str, float]]],
-    nodos: Set[str],
-) -> Dict[str, float]:
-    """Centralidad de grado normalizada: C(v) = grado(v) / (|V| - 1).
+def centralidad_grado(adj, nodos):
+    """Centralidad de grado: C(v) = (vecinos distintos de v) / (|V| - 1).
 
-    En un grafo dirigido contamos grado de salida + grado de entrada.
-
-    Parámetros:
-        adj: lista de adyacencia.
-        nodos: conjunto de todos los vértices.
-
-    Retorna:
-        {nodo: centralidad} con valores entre 0 y 1.
+    Cuenta direcciones DISTINTAS con las que v se conecta (envia o recibe),
+    sin importar cuántas transferencias haya entre ellas. Va de 0 a 1
     """
     n = len(nodos)
     if n <= 1:
         return {v: 0.0 for v in nodos}
-
-    grados = {v: 0 for v in nodos}
-    for u, vecinos in adj.items():
-        grados[u] += len(vecinos)   # grado de salida
-        for v, _ in vecinos:
-            grados[v] += 1          # grado de entrada
-
-    return {v: grados[v] / (n - 1) for v in nodos}
+    vecinos = {v: set() for v in nodos}
+    for u, destinos in adj.items():
+        for v, _ in destinos:
+            if u != v and u in vecinos and v in vecinos:
+                vecinos[u].add(v)
+                vecinos[v].add(u)
+    return {v: len(vecinos[v]) / (n - 1) for v in nodos}
 
 
 def pagerank(
@@ -57,15 +28,15 @@ def pagerank(
 ) -> Dict[str, float]:
     """Calcula PageRank con el método de iteración de potencias.
 
-    Parámetros:
-        adj: lista de adyacencia.
-        nodos: conjunto de todos los vértices.
-        amortiguacion: factor de amortiguación d (0.85 por defecto).
-        max_iter: máximo número de iteraciones.
-        tol: tolerancia de convergencia.
+    parametros:
+        adj: lista de adyacencia
+        nodos: conjunto de todos los vertices
+        amortiguacion: factor de amortiguación d (0.85 por defecto)
+        max_iter: máximo número de iteraciones
+        tol: tolerancia de convergencia
 
     Retorna:
-        {nodo: score} con scores que suman aproximadamente 1.
+        {nodo: score} con scores que suman aproximadamente 1
     """
     n = len(nodos)
     if n == 0:
@@ -117,19 +88,21 @@ def top_n(
     n: int = 10,
     etiquetas: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> List[Tuple[str, float, str]]:
-    """Devuelve los `n` nodos con mayor puntaje, ordenados de mayor a menor.
+    """devuelve los `n` nodos con mayor puntaje, ordenados de mayor a menor
 
-    Retorna:
-        Lista de tuplas (dirección, puntaje, nombre) para mostrarlos bonito.
+    retorna:
+        lista de tuplas (direccion, puntaje, nombre) para mayor orden
     """
-    ordenados = sorted(puntajes.items(), key=lambda par: par[1], reverse=True)[:n]
+    etiquetas = etiquetas or {}
+
+    # Orden: mayor puntaje primero; si empatan, por direccion (alfabetico)
+    ordenados = sorted(puntajes.items(), key=lambda par: (-par[1], par[0]))[:n]
 
     resultado = []
     for addr, score in ordenados:
-        nombre = addr
-        if etiquetas and addr in etiquetas:
-            nombre = etiquetas[addr].get("nombre", addr)
-        resultado.append((addr, round(score, 6), nombre))
+        # Si la etiqueta no existe o su nombre esta vacio, usamos la direccion
+        nombre = etiquetas.get(addr, {}).get("nombre") or addr
+        resultado.append((addr, score, nombre))
     return resultado
 
 
