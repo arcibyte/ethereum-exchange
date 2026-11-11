@@ -49,23 +49,16 @@ proyecto/
 │   ├── muestra/            <- muestra conectada real de USDC (~2.000 aristas)
 │   │   ├── transferencias_2k.csv
 │   │   └── etiquetas.csv
-│   ├── real/               <- datos REALES pequeños (ver data/real/FUENTE.md)
-│   │   ├── exchange_labels.csv <- 296 exchanges (247 cex, 49 dex)
-│   │   └── softchaincoin.csv   <- red real de SoftChainCoin
-│   ├── resumen/            <- resumen de los 28 tokens (lo genera la sección 1)
-│   └── tokens/             <- aristas limpias por token: entrada de T1-T4
+│   └── real/               <- etiquetas reales (ver data/real/FUENTE.md)
+│       └── exchange_labels.csv <- 296 exchanges (247 cex, 49 dex)
 ├── src/                    <- nuestros algoritmos (Python puro)
 │   ├── grafo.py            <- COMPARTIDO: carga única (CSV/Parquet)
-│   ├── dataset.py          <- sección 1 (Pablo): lectura, limpieza, perfil
-│   ├── evaluacion.py       <- COMPARTIDO: precisión@k contra etiquetas
 │   ├── bellman_ford.py     <- tarea 1 (Pablo)
 │   ├── centralidad.py      <- tarea 2 (Jhon)
 │   ├── comunidades.py      <- tarea 3 (Emerson)
 │   └── arbol_expansion.py  <- tarea 4 (grupo)
 ├── tests/                  <- un archivo de pruebas por dueño
 │   ├── conftest.py
-│   ├── test_dataset.py
-│   ├── test_evaluacion.py
 │   ├── test_bellman_ford.py
 │   ├── test_centralidad.py
 │   ├── test_comunidades.py
@@ -78,8 +71,7 @@ proyecto/
 │   └── Preparar_Dataset_Colab.ipynb   <- herramienta para procesar el CSV grande
 ├── scripts/
 │   ├── preparar_dataset.py <- 8,3 GB -> Parquet (~0,8 GB)
-│   ├── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
-│   └── preparar_seccion1.py <- resumen por token y aristas limpias (stdlib)
+│   └── generar_muestra.py  <- Parquet -> muestra conectada + etiquetas
 ├── requirements.txt
 ├── requirements-datos.txt  <- duckdb + pyarrow (solo preprocesamiento)
 └── README.md
@@ -154,7 +146,6 @@ jupyter notebook notebooks/Proyecto_Teoria_Grafos.ipynb
 pip install pytest
 
 python -m pytest tests/ -v                    # toda la suite
-python -m pytest tests/test_dataset.py -v         # solo sección 1 (Pablo)
 python -m pytest tests/test_bellman_ford.py -v    # solo T1 (Pablo)
 python -m pytest tests/test_centralidad.py -v     # solo T2 (Jhon)
 python -m pytest tests/test_comunidades.py -v     # solo T3 (Emerson)

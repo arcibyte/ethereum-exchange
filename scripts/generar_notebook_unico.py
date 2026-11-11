@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 import uuid
@@ -35,6 +36,41 @@ def limpiar_comentarios(texto: str) -> str:
     return "\n".join(lineas)
 
 
+def sin_definiciones(texto: str, nombres: set) -> str:
+    """Quita de un módulo las funciones, métodos y constantes de `nombres`.
+
+    El entregable incluye el código de `src/` dentro de las celdas. Algunas
+    funciones solo las usan los tests o la versión modular del notebook; aquí
+    se quitan para que el notebook tenga solo lo que ejecuta.
+    """
+    arbol = ast.parse(texto)
+    rangos = []
+
+    def revisar(cuerpo):
+        for nodo in cuerpo:
+            nombre = getattr(nodo, "name", None)
+            if (nombre is None and isinstance(nodo, ast.Assign) and len(nodo.targets) == 1
+                    and isinstance(nodo.targets[0], ast.Name)):
+                nombre = nodo.targets[0].id
+            if nombre in nombres:
+                inicio = nodo.decorator_list[0].lineno if getattr(nodo, "decorator_list", None) else nodo.lineno
+                rangos.append((inicio, nodo.end_lineno))
+            elif isinstance(nodo, ast.ClassDef):
+                revisar(nodo.body)
+
+    revisar(arbol.body)
+    encontrados = len(rangos)
+    if encontrados != len(nombres):
+        raise ValueError(f"No encontré todas las definiciones a quitar: {sorted(nombres)}")
+    lineas = texto.splitlines()
+    for inicio, fin in sorted(rangos, reverse=True):
+        # También se quitan los comentarios pegados justo encima de la definición.
+        while inicio >= 2 and lineas[inicio - 2].strip().startswith("#"):
+            inicio -= 1
+        del lineas[inicio - 1:fin]
+    return re.sub(r"\n{4,}", "\n\n\n", "\n".join(lineas))
+
+
 def code(texto):
     return {
         "cell_type": "code",
@@ -46,8 +82,6 @@ def code(texto):
     }
 
 
-seccion1_md = ""
-seccion1_code = ""
 
 carga_md = "## Cargar el dataset\n\nSube **un solo archivo**:\n\n```\ntransferencias.parquet\n```\n\nPuedes dejarlo en cualquiera de estas rutas:\n\n```\n/content/transferencias.parquet\nMi unidad/ED2/transferencias.parquet\ndata/procesado/transferencias.parquet\n```\n\nLa celda busca el archivo, genera una muestra de USDC y construye el grafo\nque usan las Tareas 1–4.\n\n> Si estás en Colab, también puedes subirlo con **Archivo → Subir** o con:\n>\n> ```python\n> # from google.colab import files\n> # files.upload()\n> ```"
 carga_datos = "# ============ RUTAS Y CARGA DEL DATASET ============\nimport os\nfrom collections import defaultdict, deque\n\nCARPETA_DRIVE = \"/content/drive/MyDrive/ED2\"\nCARPETA_LOCAL = \"data\"\n\nUSDC = \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"\nCERO = \"0x0000000000000000000000000000000000000000\"\n\n\ndef buscar_archivo(*rutas):\n    \"\"\"Devuelve la primera ruta que exista, o None si no existe ninguna.\"\"\"\n    for ruta in rutas:\n        if ruta and os.path.isfile(ruta):\n            return ruta\n    return None\n\n\nRUTA_PARQUET = buscar_archivo(\n    \"/content/transferencias.parquet\",\n    f\"{CARPETA_DRIVE}/transferencias.parquet\",\n    f\"{CARPETA_LOCAL}/procesado/transferencias.parquet\",\n)\n\nprint(\"Parquet encontrado:\", RUTA_PARQUET)\n\nif RUTA_PARQUET is None:\n    raise FileNotFoundError(\n        \"No encontré transferencias.parquet. Súbelo a /content/ o a \"\n        \"Mi unidad/ED2/transferencias.parquet.\"\n    )\n\n\ndef componente_mayor(aristas):\n    \"\"\"Conserva solo las aristas de la componente conexa más grande.\"\"\"\n    adyacencia = defaultdict(set)\n    for origen, destino, _ in aristas:\n        adyacencia[origen].add(destino)\n        adyacencia[destino].add(origen)\n\n    visitados = set()\n    mejor = set()\n\n    for inicio in adyacencia:\n        if inicio in visitados:\n            continue\n\n        componente = set()\n        cola = deque([inicio])\n        visitados.add(inicio)\n\n        while cola:\n            nodo = cola.popleft()\n            componente.add(nodo)\n            for vecino in adyacencia[nodo]:\n                if vecino not in visitados:\n                    visitados.add(vecino)\n                    cola.append(vecino)\n\n        if len(componente) > len(mejor):\n            mejor = componente\n\n    return [\n        (origen, destino, peso)\n        for origen, destino, peso in aristas\n        if origen in mejor and destino in mejor\n    ]\n\n\ndef muestra_desde_parquet(ruta):\n    \"\"\"Genera una muestra de USDC desde el Parquet.\"\"\"\n    try:\n        import duckdb\n    except ImportError:\n        import subprocess\n        import sys\n        subprocess.run(\n            [sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"duckdb\", \"pyarrow\"],\n            check=True,\n        )\n        import duckdb\n\n    con = duckdb.connect()\n    con.execute(\"SET memory_limit='2GB'\")\n    con.execute(\"SET threads=2\")\n\n    filas = con.execute(\n        \"\"\"\n        SELECT from_address, to_address, value\n        FROM read_parquet(?)\n        WHERE token_address = ?\n        USING SAMPLE reservoir(65000 ROWS) REPEATABLE (42)\n        \"\"\",\n        [ruta, USDC],\n    ).fetchall()\n\n    aristas = []\n    for origen, destino, valor in filas:\n        origen = str(origen).lower()\n        destino = str(destino).lower()\n        valor = float(valor) / 1e6\n\n        if not origen or not destino or origen == destino:\n            continue\n        if origen == CERO or destino == CERO:\n            continue\n        if valor <= 0:\n            continue\n\n        aristas.append((origen, destino, valor))\n\n    return componente_mayor(aristas)\n\n\naristas = muestra_desde_parquet(RUTA_PARQUET)\n\ngrafo = Grafo()\nfor origen, destino, peso in aristas:\n    grafo._agregar_arista(origen, destino, peso, limpiar=False)\n\nprint(\"Muestra generada desde el Parquet:\")\nprint(\"  nodos   :\", len(grafo.nodos))\nprint(\"  aristas :\", len(grafo.aristas))\nprint(\"  resumen :\", grafo.resumen())"
@@ -105,45 +139,115 @@ Esta celda define la estructura compartida: un grafo dirigido y ponderado.
 El resto de celdas usan el mismo objeto `grafo`.
 """
 
-t1_md = """
-## Tarea 1 — Bellman-Ford: camino de costo mínimo
+t1_md = r"""
+## Tarea 1 — Bellman-Ford: ¿por dónde se mueve el dinero?
 
 **Responsable:** Pablo Álvarez
 
-**Estructura de datos:** lista de adyacencia + diccionario de distancias.
+**Estructura de datos:** lista de adyacencia + diccionarios de distancias y
+predecesores.
 
-El costo de un camino es la suma de los pesos de sus aristas. Bellman-Ford
-relaja todas las aristas `|V|-1` veces y detecta ciclos negativos.
+**Problema.** Desde el exchange etiquetado que más transferencias envía en la
+muestra, ¿cuál es la ruta **más probable** que sigue su dinero hasta cada otra
+dirección? Es la pregunta de un análisis forense: rastrear fondos.
 
-La implementación está en la celda siguiente y se prueba con la muestra.
+**Equivalencia matemática.** Si `u` envió en total $S_u$ y le mandó
+$w_{uv}$ a `v`, la fracción $p_{uv} = w_{uv} / S_u$ es la probabilidad de que
+una unidad que sale de `u` vaya a `v`. Con
+
+$$\text{costo}(u, v) = -\log p_{uv}$$
+
+la probabilidad de un camino (el producto de sus $p$) se convierte en una
+suma de costos, porque $-\log(p_1 p_2 \cdots) = -\log p_1 - \log p_2 - \cdots$.
+Entonces el **camino de costo mínimo es el camino más probable**, y
+$e^{-\text{distancia}}$ es su probabilidad. Como $p \le 1$, todos los costos
+son $\ge 0$.
+
+**Algoritmo.** Bellman-Ford relaja todas las aristas (si
+`dist[u] + w < dist[v]`, actualiza `dist[v]`) hasta `|V|-1` veces. Si una
+pasada completa no cambia nada, se detiene antes. Una pasada extra detecta
+ciclos de peso negativo.
+
+| Alternativa | ¿Por qué sí / no? |
+|---|---|
+| Dijkstra | Prohibido por las reglas del proyecto |
+| BFS | Solo sirve si todas las aristas pesan lo mismo (cuenta saltos) |
+| Floyd-Warshall | Todos los pares: $O(|V|^3)$, inviable con miles de nodos |
+| **Bellman-Ford** | Pesos reales, detecta ciclos negativos y la parada temprana lo hace rápido en la práctica |
+
+**Complejidad:** $O(|V| \cdot |E|)$ en el peor caso. La demo muestra cuántas
+pasadas hizo en realidad.
 """
 
-t1_demo = '''
+t1_demo = r'''
 # ============ DEMO TAREA 1 ============
+import math
+import time
 from collections import Counter
 
-salidas = Counter(origen for origen, _, _ in grafo.aristas)
-etiquetados = sorted(
-    (n for n in salidas if n in grafo.etiquetas),
-    key=salidas.get, reverse=True,
-)
-origen = etiquetados[0] if etiquetados else max(salidas, key=salidas.get)
+import matplotlib.pyplot as plt
 
-distancias, previos = bellman_ford_desde_aristas(grafo.aristas, origen)
-alcanzables = sorted(
-    (d, nodo) for nodo, d in distancias.items()
-    if d != float("inf") and nodo != origen
-)
-inalcanzables = sum(1 for d in distancias.values() if d == float("inf"))
+# 1) Origen: el exchange etiquetado que más transferencias envía en la muestra
+#    (si no hay ninguno, la dirección que más envía).
+envios = Counter(o for o, _, _ in grafo.aristas)
+etiquetados = [v for v in envios if v in grafo.etiquetas]
+origen = max(etiquetados or envios, key=lambda v: (envios[v], v))
 
-print(f"Origen: {grafo.nombre(origen)}")
-print(f"Nodos alcanzables: {len(alcanzables):,}")
-print(f"Nodos inalcanzables: {inalcanzables:,}\\n")
-print("Los 10 destinos más baratos:")
-for d, destino in alcanzables[:10]:
+# 2) Costo = -log(fracción del flujo saliente) -> camino más probable.
+adj_prob = adyacencia_probabilidad(grafo.aristas)
+t0 = time.perf_counter()
+dist, previos, pasadas = bellman_ford_con_pasadas(adj_prob, origen)
+segundos = time.perf_counter() - t0
+
+n_nodos = len(dist)
+n_aristas = sum(len(v) for v in adj_prob.values())
+alcanzables = {v: d for v, d in dist.items() if d < math.inf and v != origen}
+
+print(f"Origen: {grafo.nombre(origen)}  ({envios[origen]:,} transferencias enviadas)")
+print(f"Grafo: {n_nodos:,} nodos, {n_aristas:,} aristas (pares distintos)")
+print(f"Pasadas: {pasadas} de {n_nodos - 1:,} posibles (parada temprana) -> {segundos:.2f} s")
+print(f"Alcanzables desde el origen: {len(alcanzables):,}; inalcanzables: {n_nodos - 1 - len(alcanzables):,}")
+
+# 3) Número de saltos de cada camino mínimo (siguiendo los predecesores).
+saltos = {origen: 0}
+for v in alcanzables:
+    pila = []
+    while v not in saltos:
+        pila.append(v)
+        v = previos[v]
+    base = saltos[v]
+    for u in reversed(pila):
+        base += 1
+        saltos[u] = base
+
+print("\nLos 10 destinos más probables a 2 o más saltos:")
+lejanos = sorted((d, v) for v, d in alcanzables.items() if saltos[v] >= 2)
+for d, destino in lejanos[:10]:
     camino = reconstruir_camino(previos, origen, destino)
-    nombres = " -> ".join(grafo.nombre(n) for n in camino)
-    print(f"  {grafo.nombre(destino):<16} costo={d:>14,.2f}  ({nombres})")
+    ruta = " -> ".join(grafo.nombre(x)[:10] for x in camino)
+    print(f"  prob={math.exp(-d):>8.2%}  saltos={saltos[destino]}  {ruta}")
+
+# 4) Gráficas: saltos de los caminos y probabilidad de llegar.
+fig, ejes = plt.subplots(1, 2, figsize=(12, 4))
+cuenta = Counter(saltos[v] for v in alcanzables)
+xs = sorted(cuenta)
+ejes[0].bar(xs, [cuenta[x] for x in xs], color="steelblue")
+ejes[0].set_xlabel("Saltos del camino más probable")
+ejes[0].set_ylabel("Direcciones")
+ejes[0].set_title(f"Pocos saltos: {pasadas} pasadas bastaron")
+ejes[1].hist([-d / math.log(10) for d in alcanzables.values()], bins=40, color="darkorange", edgecolor="white")
+ejes[1].set_xlabel("log10(probabilidad del camino)")
+ejes[1].set_ylabel("Direcciones")
+ejes[1].set_title("¿Qué tan probable es que el dinero llegue?")
+plt.tight_layout()
+plt.show()
+
+# 5) Detección de ciclos negativos (ejemplo pequeño: A->B->C->A pesa -3).
+ejemplo = {"A": [("B", 1.0)], "B": [("C", -2.0)], "C": [("A", -2.0)]}
+try:
+    bellman_ford(ejemplo, "A")
+except ValueError as error:
+    print("\nEjemplo con ciclo A->B->C->A de peso -3:", error)
 '''
 
 t2_md = """
@@ -570,11 +674,29 @@ conclusiones = """
    documentado en el repositorio.
 """
 
+# Capa de datos del entregable: sin las funciones de carga de CSV/Parquet,
+# porque el notebook construye el grafo en la celda "Cargar el dataset".
+grafo_entregable = sin_definiciones(leer_modulo("grafo.py"), {"COLUMNAS", "_elegir_columnas", "_sql_texto", "_sql_columna", "cargar_transferencias", "cargar_parquet", "cargar", "cargar_etiquetas", "conservar_componente_mayor", "cargar_grafo"})
+grafo_entregable = grafo_entregable.replace("from collections import defaultdict, deque", "from collections import defaultdict")
+grafo_entregable = grafo_entregable.replace("from typing import Dict, List, Optional, Set, Tuple", "from typing import Dict, List, Set, Tuple")
+grafo_entregable = grafo_entregable.replace("    # Carga de datos\n", "    # Construcción del grafo\n")
+grafo_entregable = limpiar_comentarios(grafo_entregable)
+grafo_entregable = re.sub(r"\n\n+(    # Utilidades)\n\n+", r"\n\n\1\n\n", grafo_entregable)
+grafo_entregable = re.sub(r"\n\n\n+(DIRECCION_CERO)", r"\n\n\1", grafo_entregable)
+grafo_entregable = grafo_entregable.replace(
+    "La carga acepta **CSV** y **Parquet**. Para Parquet se usa DuckDB solo para\n"
+    "leer y muestrear el archivo; los algoritmos del proyecto siguen siendo Python\n"
+    "puro y reciben el grafo ya construido.",
+    "En este notebook el grafo se llena en la celda \"Cargar el dataset\" con una\n"
+    "muestra de USDC del Parquet; DuckDB solo lee el archivo y los algoritmos\n"
+    "son Python puro.",
+)
+
 celdas = [
     md(portada),
     md(teoria_md),
     md(capa_datos_md),
-    code(leer_modulo("grafo.py")),
+    code(grafo_entregable),
     md(drive_md),
     code(drive_code),
     md(carga_md),
@@ -582,15 +704,15 @@ celdas = [
     md(etiquetas_md),
     code(etiquetas_code),
     md(t1_md),
-    code(leer_modulo("bellman_ford.py") + "\n\n" + t1_demo),
+    code(sin_definiciones(leer_modulo("bellman_ford.py"), {"construir_adyacencia", "bellman_ford_desde_aristas"}) + "\n\n" + t1_demo),
     md(t2_md),
     code(leer_modulo("centralidad.py") + "\n\n" + t2_demo),
     md(t3_md),
-    code(leer_modulo("comunidades.py") + "\n\n" + t3_demo),
+    code(sin_definiciones(leer_modulo("comunidades.py"), {"louvain_desde_aristas"}) + "\n\n" + t3_demo),
     md(t3_exp_md),
     code(t3_exp_code),
     md(t4_md),
-    code(leer_modulo("arbol_expansion.py") + "\n\n" + t4_demo),
+    code(sin_definiciones(leer_modulo("arbol_expansion.py"), {"resumen_mst"}) + "\n\n" + t4_demo),
     md(analisis_md),
     code(analisis_code),
     md(conclusiones),
